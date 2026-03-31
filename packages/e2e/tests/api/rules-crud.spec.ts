@@ -25,7 +25,7 @@ test.describe('Rules CRUD API', () => {
   test.beforeAll(() => {
     const data = runtimeData();
     ruleSetId = data.ruleSetId ?? '';
-    test.skip(!ruleSetId, 'No ruleSetId found in runtime data');
+    expect(ruleSetId, 'ruleSetId must be present in .runtime-data.json').toBeTruthy();
   });
 
   test('POST /admin/rules creates a new rule', async ({ request }) => {
@@ -57,7 +57,7 @@ test.describe('Rules CRUD API', () => {
   });
 
   test('GET /admin/rules/:id reads the created rule', async ({ request }) => {
-    test.skip(!ruleId, 'Rule not created');
+    expect(ruleId, 'ruleId must exist — POST test must run first').toBeTruthy();
 
     const response = await request.get(`/api/v1/admin/rules/${ruleId}`, {
       headers: { Authorization: AUTH },
@@ -83,7 +83,7 @@ test.describe('Rules CRUD API', () => {
   });
 
   test('PUT /admin/rules/:id updates the rule and increments version', async ({ request }) => {
-    test.skip(!ruleId, 'Rule not created');
+    expect(ruleId, 'ruleId must exist — POST test must run first').toBeTruthy();
 
     const response = await request.put(`/api/v1/admin/rules/${ruleId}`, {
       headers: { Authorization: AUTH },
@@ -97,7 +97,7 @@ test.describe('Rules CRUD API', () => {
   });
 
   test('DELETE /admin/rules/:id deletes the rule', async ({ request }) => {
-    test.skip(!ruleId, 'Rule not created');
+    expect(ruleId, 'ruleId must exist — POST test must run first').toBeTruthy();
 
     const response = await request.delete(`/api/v1/admin/rules/${ruleId}`, {
       headers: { Authorization: AUTH },
@@ -109,7 +109,7 @@ test.describe('Rules CRUD API', () => {
   });
 
   test('GET /admin/rules/:id returns 404 after deletion', async ({ request }) => {
-    test.skip(!ruleId, 'Rule not created');
+    expect(ruleId, 'ruleId must exist — POST test must run first').toBeTruthy();
 
     const response = await request.get(`/api/v1/admin/rules/${ruleId}`, {
       headers: { Authorization: AUTH },

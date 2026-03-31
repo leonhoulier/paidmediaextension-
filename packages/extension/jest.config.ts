@@ -20,11 +20,9 @@ const config: Config = {
     ],
   },
   collectCoverageFrom: [
-    'src/adapters/**/*.ts',
-    'src/instrumentation/**/*.ts',
-    '!src/adapters/**/__tests__/**',
-    '!src/instrumentation/**/__tests__/**',
-    '!src/adapters/**/index.ts',
+    'src/**/*.ts',
+    '!src/**/__tests__/**',
+    '!src/**/*.d.ts',
   ],
 };
 

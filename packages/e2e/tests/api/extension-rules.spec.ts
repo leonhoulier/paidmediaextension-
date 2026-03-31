@@ -21,11 +21,10 @@ test.describe('Extension Rules API', () => {
   test.beforeAll(() => {
     const data = runtimeData();
     extensionToken = data.buyerExtensionToken ?? '';
+    expect(extensionToken, 'buyerExtensionToken must be present in .runtime-data.json').toBeTruthy();
   });
 
   test('GET /rules returns rules with valid extension token', async ({ request }) => {
-    test.skip(!extensionToken, 'No buyer extension token');
-
     const response = await request.get('/api/v1/rules', {
       headers: { 'X-Extension-Token': extensionToken },
     });
@@ -40,8 +39,6 @@ test.describe('Extension Rules API', () => {
   });
 
   test('GET /rules filters by platform', async ({ request }) => {
-    test.skip(!extensionToken, 'No buyer extension token');
-
     const metaResp = await request.get('/api/v1/rules?platform=meta', {
       headers: { 'X-Extension-Token': extensionToken },
     });
@@ -77,8 +74,6 @@ test.describe('Extension Rules API', () => {
   });
 
   test('GET /rules/version returns version and lastUpdated', async ({ request }) => {
-    test.skip(!extensionToken, 'No buyer extension token');
-
     const response = await request.get('/api/v1/rules/version', {
       headers: { 'X-Extension-Token': extensionToken },
     });

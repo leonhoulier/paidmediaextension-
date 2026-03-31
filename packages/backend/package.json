@@ -49,6 +49,7 @@
     "@types/node": "^20.11.0",
     "@types/supertest": "^6.0.2",
     "jest": "^29.7.0",
+    "jest-mock-extended": "^4.0.0",
     "prisma": "^5.8.0",
     "supertest": "^6.3.4",
     "ts-jest": "^29.1.1",
@@ -75,7 +76,8 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^@media-buying-governance/shared$": "<rootDir>/../../shared/src/index.ts"
+      "^@media-buying-governance/shared$": "<rootDir>/../../shared/src/index.ts",
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     }
   }
 }

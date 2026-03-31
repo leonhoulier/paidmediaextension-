@@ -25,23 +25,20 @@ test.describe('Compliance Events API', () => {
     extensionToken = data.buyerExtensionToken ?? '';
     metaAccountId = data.metaAccountId ?? '';
 
-    if (!extensionToken) return;
+    expect(extensionToken, 'buyerExtensionToken must be present in .runtime-data.json').toBeTruthy();
+    expect(metaAccountId, 'metaAccountId must be present in .runtime-data.json').toBeTruthy();
 
     // Get a rule ID to reference in events
     const rulesResp = await request.get('http://localhost:3000/api/v1/rules', {
       headers: { 'X-Extension-Token': extensionToken },
     });
-    if (rulesResp.ok()) {
-      const body = await rulesResp.json();
-      if (body.rules.length > 0) {
-        ruleId = body.rules[0].id;
-      }
-    }
+    expect(rulesResp.ok(), 'GET /rules must succeed to obtain a ruleId for events').toBeTruthy();
+    const body = await rulesResp.json();
+    expect(body.rules.length, 'At least one rule must exist for compliance event tests').toBeGreaterThan(0);
+    ruleId = body.rules[0].id;
   });
 
   test('POST /compliance/events creates batch events', async ({ request }) => {
-    test.skip(!extensionToken || !metaAccountId || !ruleId, 'Missing runtime data');
-
     const response = await request.post('/api/v1/compliance/events', {
       headers: { 'X-Extension-Token': extensionToken },
       data: {
@@ -87,8 +84,6 @@ test.describe('Compliance Events API', () => {
   });
 
   test('POST /compliance/events rejects empty events array', async ({ request }) => {
-    test.skip(!extensionToken, 'No buyer extension token');
-
     const response = await request.post('/api/v1/compliance/events', {
       headers: { 'X-Extension-Token': extensionToken },
       data: { events: [] },
@@ -98,8 +93,6 @@ test.describe('Compliance Events API', () => {
   });
 
   test('POST /compliance/comment creates a comment event', async ({ request }) => {
-    test.skip(!extensionToken || !ruleId, 'Missing runtime data');
-
     const response = await request.post('/api/v1/compliance/comment', {
       headers: { 'X-Extension-Token': extensionToken },
       data: {
@@ -116,8 +109,6 @@ test.describe('Compliance Events API', () => {
   });
 
   test('POST /compliance/comment rejects missing fields', async ({ request }) => {
-    test.skip(!extensionToken || !ruleId, 'Missing runtime data');
-
     const response = await request.post('/api/v1/compliance/comment', {
       headers: { 'X-Extension-Token': extensionToken },
       data: {
