@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Terraform Variables — Example Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy this file to terraform.tfvars and fill in your values:
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# IMPORTANT: Never commit terraform.tfvars to version control.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─── Required ────────────────────────────────────────────────────────────────
+
+project_id  = "your-gcp-project-id"
+db_password = "CHANGE_ME_TO_A_STRONG_PASSWORD"
+
+# ─── Optional overrides ─────────────────────────────────────────────────────
+
+# region            = "us-central1"
+# db_instance_name  = "mbg-postgres"
+# db_tier           = "db-f1-micro"     # Use "db-g1-small" or higher for production
+# db_name           = "media_buying_governance"
+# db_user           = "mbg_app"
+
+# backend_min_instances = 0             # Set to 1+ for production (avoids cold starts)
+# backend_max_instances = 3
+# backend_memory        = "512Mi"
+# backend_cpu           = "1"
+
+# admin_portal_bucket_name = "mbg-admin-portal"
+
+# ─── Docker image (set after first build+push) ──────────────────────────────
+
+# backend_image = "us-central1-docker.pkg.dev/your-project/mbg-images/mbg-backend:latest"
+
+# ─── Alerting ────────────────────────────────────────────────────────────────
+
+# alert_email       = "alerts@yourcompany.com"
+# slack_webhook_url = "https://hooks.slack.com/services/T.../B.../..."
+
+# ─── Firebase (optional — can also add via gcloud CLI) ───────────────────────
+
+# firebase_service_account_json = "{ ... JSON ... }"
+
+# ─── Production Instrumentation (optional — enables Sentry, PostHog, Split.io) ─
+
+# sentry_dsn       = "https://examplePublicKey@o0.ingest.sentry.io/0"
+# posthog_api_key   = "phc_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+# splitio_api_key   = "sdk-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"

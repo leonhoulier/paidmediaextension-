@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campaigns | Ads Manager</title>
+  <style>
+    /*
+     * Enhanced Meta Ads Manager fixture for Step 4 regression testing.
+     *
+     * Additions over meta-campaign-creation.html:
+     *   1. data-surface attributes for FIELD_FALLBACK_SELECTORS
+     *   2. __d module system simulation (extension detection evasion)
+     *   3. Publish confirmation dialog (publishDialogObserver target)
+     *   4. Tall content to test sidebar positioning vs page flow
+     *   5. Multiple field containers to test click-to-field scrolling
+     */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      background: #f0f2f5;
+      color: #1c1e21;
+      font-size: 14px;
+      /* Ensure page is tall enough to test scroll behavior */
+      min-height: 200vh;
+    }
+
+    /* ── Top Nav ─────────────────────────────────── */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #dddfe2;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .topbar__brand { font-weight: 700; font-size: 18px; color: #1877f2; }
+    .topbar__account { font-size: 13px; color: #65676b; margin-left: auto; }
+
+    /* ── Layout ──────────────────────────────────── */
+    .ams-layout {
+      display: flex;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      gap: 24px;
+    }
+    .ams-main { flex: 1; }
+    .ams-sidebar { width: 320px; flex-shrink: 0; }
+
+    /* ── Cards ────────────────────────────────────── */
+    .ams-card {
+      background: #fff;
+      border: 1px solid #dddfe2;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .ams-card__title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .ams-field { margin-bottom: 16px; }
+    .ams-field__label {
+      display: block;
+      font-size: 13px;
+      color: #65676b;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .ams-field__input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #dddfe2;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 150ms;
+    }
+    .ams-field__input:focus { border-color: #1877f2; }
+
+    /* ── Objective Cards ─────────────────────────── */
+    .objective-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+    .objective-card {
+      flex: 1 1 calc(33% - 12px);
+      min-width: 140px;
+      border: 2px solid #dddfe2;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 150ms, background 150ms;
+    }
+    .objective-card[aria-checked="true"],
+    .objective-card.selected {
+      border-color: #1877f2;
+      background: #e7f3ff;
+    }
+    .objective-card__icon { font-size: 24px; margin-bottom: 8px; }
+    .objective-card__name { font-size: 14px; font-weight: 600; }
+
+    /* ── Budget Section ──────────────────────────── */
+    .budget-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .budget-type-dropdown {
+      padding: 10px 12px;
+      border: 1px solid #dddfe2;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* ── Toggle / Switch ─────────────────────────── */
+    .ams-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+    }
+    .ams-toggle-label { font-size: 14px; font-weight: 500; }
+    .ams-toggle-sublabel { font-size: 12px; color: #65676b; }
+    .ams-switch {
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      background: #65676b;
+      position: relative;
+      cursor: pointer;
+      transition: background 200ms;
+    }
+    .ams-switch[aria-checked="true"] { background: #1877f2; }
+    .ams-switch__thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 200ms;
+    }
+    .ams-switch[aria-checked="true"] .ams-switch__thumb {
+      transform: translateX(20px);
+    }
+
+    /* ── Publish bar ─────────────────────────────── */
+    .publish-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top: 1px solid #dddfe2;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      z-index: 100;
+    }
+    .publish-bar__btn {
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+    }
+    .publish-bar__btn--secondary {
+      background: #e4e6eb;
+      color: #1c1e21;
+    }
+    .publish-bar__btn--primary {
+      background: #1877f2;
+      color: #fff;
+    }
+
+    /* ── Publish Confirmation Dialog (for publishDialogObserver) ── */
+    .publish-confirm-dialog {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .publish-confirm-dialog.active { display: flex; }
+    .publish-confirm-dialog__content {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      width: 400px;
+      max-width: 90%;
+    }
+    .publish-confirm-dialog__title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .publish-confirm-dialog__body {
+      font-size: 14px;
+      color: #65676b;
+      margin-bottom: 20px;
+    }
+    .publish-confirm-dialog__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* ── Scrolling spacer sections ── */
+    .scroll-spacer {
+      height: 300px;
+      background: #f8f9fa;
+      border: 1px dashed #dddfe2;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #65676b;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Fixture info ────────────────────────────── */
+    .fixture-info {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #664d03;
+    }
+    .fixture-info strong { display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <!-- ═══════════════════════════════════════════════════════
+       TOP NAVIGATION BAR
+       ═══════════════════════════════════════════════════════ -->
+  <div class="topbar">
+    <span class="topbar__brand">Ads Manager</span>
+    <span class="topbar__account">Account: act_1639086456168798</span>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       MAIN LAYOUT
+       ═══════════════════════════════════════════════════════ -->
+  <div class="ams-layout">
+    <div class="ams-main">
+
+      <div class="fixture-info">
+        <strong>Test Fixture: Meta Ads Manager - Step 4 Regression</strong>
+        URL params: ?act=1639086456168798&amp;tool=CAMPAIGN_CREATION_FLOW<br/>
+        Enhanced fixture with data-surface attrs, __d simulation, publish dialog, and scroll targets.
+      </div>
+
+      <!-- ─── Campaign Name (with data-surface for fallback selectors) ── -->
+      <div class="ams-card" id="field-campaign-name" data-surface="campaign-name">
+        <div class="ams-card__title">Campaign name</div>
+        <div class="ams-field">
+          <div data-testid="campaign-name-input" class="_3-90">
+            <div class="_3-91">
+              <input
+                type="text"
+                aria-label="Campaign name"
+                value="DLG_US_Awareness_Q1_20260207"
+                class="ams-field__input _1reg"
+                data-testid="campaign-name-field"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Campaign Objective ───────────────────── -->
+      <div class="ams-card" id="field-campaign-objective" data-surface="campaign-objective">
+        <div class="ams-card__title">Choose a campaign objective</div>
+        <div data-testid="campaign-objective-selector" role="radiogroup" class="objective-grid _5ptz">
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F4E2;</div>
+            <div class="objective-card__name">Awareness</div>
+          </div>
+          <div role="radio" aria-checked="true" aria-selected="true" class="objective-card selected _5pu1" tabindex="0" data-selected="true">
+            <div class="objective-card__icon">&#x1F6A6;</div>
+            <div class="objective-card__name">Traffic</div>
+          </div>
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F4AC;</div>
+            <div class="objective-card__name">Engagement</div>
+          </div>
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F465;</div>
+            <div class="objective-card__name">Leads</div>
+          </div>
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F4F1;</div>
+            <div class="objective-card__name">App promotion</div>
+          </div>
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F6D2;</div>
+            <div class="objective-card__name">Sales</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scroll spacer: pushes budget section below fold for scroll testing -->
+      <div class="scroll-spacer" id="spacer-1">
+        [Spacer section — simulates Meta's long form layout]
+      </div>
+
+      <!-- ─── CBO Toggle ──────────────────────────── -->
+      <div class="ams-card" id="field-campaign-cbo" data-surface="campaign-cbo">
+        <div class="ams-card__title">Campaign budget optimization</div>
+        <div class="ams-toggle-row _42ft">
+          <div>
+            <div class="ams-toggle-label">Advantage+ campaign budget</div>
+            <div class="ams-toggle-sublabel">Automatically distribute your budget across ad sets</div>
+          </div>
+          <div
+            role="switch"
+            aria-checked="true"
+            aria-label="Advantage+ campaign budget"
+            data-testid="cbo-toggle"
+            class="ams-switch"
+            tabindex="0"
+          >
+            <div class="ams-switch__thumb"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Budget Section ───────────────────────── -->
+      <div class="ams-card" id="field-campaign-budget" data-surface="campaign-budget">
+        <div class="ams-card__title">Budget &amp; schedule</div>
+        <div class="budget-section _42fu" data-testid="budget-section">
+          <div class="ams-field">
+            <label class="ams-field__label">Budget type</label>
+            <div
+              aria-label="Budget type"
+              data-testid="budget-type-selector"
+              class="budget-type-dropdown _1amu"
+              role="combobox"
+              aria-expanded="false"
+            >
+              <span aria-selected="true">Lifetime budget</span>
+              <span>&#x25BC;</span>
+            </div>
+          </div>
+          <div class="ams-field" data-testid="budget-value-wrapper">
+            <label class="ams-field__label">Budget amount</label>
+            <div class="_3-90">
+              <input
+                type="text"
+                aria-label="Budget"
+                value="$5,000.00"
+                class="ams-field__input _1reg"
+                data-testid="budget-value-input"
+                inputmode="decimal"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scroll spacer: additional height for scroll-into-view testing -->
+      <div class="scroll-spacer" id="spacer-2">
+        [Spacer section — additional content area]
+      </div>
+
+      <!-- ─── Targeting Section (for click-to-field testing) ──────── -->
+      <div class="ams-card" id="field-adset-targeting" data-surface="campaign-targeting">
+        <div class="ams-card__title">Targeting</div>
+        <div class="ams-field">
+          <label class="ams-field__label">Locations</label>
+          <div data-testid="location-targeting-section" data-surface="geo" aria-label="Location">
+            <span data-testid="location-tag-US" class="location-chip">United States</span>
+            <span data-testid="location-tag-CA" class="location-chip">Canada</span>
+          </div>
+        </div>
+        <div class="ams-field">
+          <label class="ams-field__label">Age range</label>
+          <div aria-label="Age range" data-surface="age">
+            <input type="number" value="18" aria-label="Min age" style="width:60px"/>
+            <span> — </span>
+            <input type="number" value="65" aria-label="Max age" style="width:60px"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Final scroll spacer -->
+      <div class="scroll-spacer" id="spacer-3">
+        [Bottom spacer — tests that sidebar stays fixed during long scroll]
+      </div>
+
+    </div><!-- /.ams-main -->
+
+    <div class="ams-sidebar">
+      <div class="ams-card">
+        <div class="ams-card__title">Campaign details</div>
+        <p style="font-size: 13px; color: #65676b;">
+          Traffic objective with Advantage+ campaign budget enabled.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PUBLISH BAR
+       ═══════════════════════════════════════════════════════ -->
+  <div class="publish-bar">
+    <button class="publish-bar__btn publish-bar__btn--secondary">Discard draft</button>
+    <button type="submit" class="publish-bar__btn publish-bar__btn--primary" data-testid="publish-button">
+      Publish
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PUBLISH CONFIRMATION DIALOG
+       Meta shows a native confirm dialog when Publish is clicked.
+       The publishDialogObserver should intercept this.
+       ═══════════════════════════════════════════════════════ -->
+  <div class="publish-confirm-dialog" id="publish-confirm-dialog" data-testid="publish-confirm-dialog">
+    <div class="publish-confirm-dialog__content">
+      <div class="publish-confirm-dialog__title">Confirm publish</div>
+      <div class="publish-confirm-dialog__body">
+        Your campaign will start running once published. Are you sure?
+      </div>
+      <div class="publish-confirm-dialog__actions">
+        <button class="publish-bar__btn publish-bar__btn--secondary" data-testid="publish-cancel-btn">Cancel</button>
+        <button class="publish-bar__btn publish-bar__btn--primary" data-testid="publish-confirm-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SCRIPTS
+       ═══════════════════════════════════════════════════════ -->
+  <script>
+    // ───────────────────────────────────────────────────────
+    // 1. React Fiber simulation
+    // ───────────────────────────────────────────────────────
+    (function simulateReactFiber() {
+      const fiberKey = '__reactFiber$mock' + Math.random().toString(36).slice(2, 8);
+
+      const fields = {
+        'input[aria-label="Campaign name"]': {
+          memoizedProps: { value: 'DLG_US_Awareness_Q1_20260207', onChange: function() {} },
+          return: { type: { displayName: 'CampaignNameInput' }, memoizedProps: { value: 'DLG_US_Awareness_Q1_20260207' }, return: null },
+          type: { displayName: 'input', name: 'input' },
+        },
+        'input[aria-label="Budget"]': {
+          memoizedProps: { value: '$5,000.00' },
+          return: { type: { displayName: 'BudgetInput' }, memoizedProps: { value: 5000 }, return: null },
+          type: { displayName: 'input', name: 'input' },
+        },
+      };
+
+      for (const [selector, fiber] of Object.entries(fields)) {
+        const el = document.querySelector(selector);
+        if (el) el[fiberKey] = fiber;
+      }
+
+      const cbo = document.querySelector('[role="switch"][aria-label*="Advantage"]');
+      if (cbo) cbo[fiberKey] = {
+        memoizedProps: { checked: true, value: true },
+        return: { type: { displayName: 'CBOToggle' }, memoizedProps: { checked: true }, return: null },
+        type: { displayName: 'div', name: 'div' },
+      };
+
+      const obj = document.querySelector('[data-testid="campaign-objective-selector"]');
+      if (obj) obj[fiberKey] = {
+        memoizedProps: { value: 'OUTCOME_TRAFFIC' },
+        return: null,
+        type: { displayName: 'ObjectiveSelector' },
+      };
+
+      const budgetType = document.querySelector('[aria-label="Budget type"]');
+      if (budgetType) budgetType[fiberKey] = {
+        memoizedProps: { value: 'lifetime' },
+        return: null,
+        type: { displayName: 'BudgetTypeDropdown' },
+      };
+
+      console.log('[Fixture] React Fiber attached:', fiberKey);
+    })();
+
+    // ───────────────────────────────────────────────────────
+    // 2. __d module system simulation (for extension detection evasion testing)
+    //
+    //    Meta's __d registers modules. The extension wraps __d to intercept
+    //    'AdsBrowserExtensionErrorUtils' and stub isBrowserExtensionError.
+    // ───────────────────────────────────────────────────────
+    (function simulateModuleSystem() {
+      const modules = {};
+      window.__d = function(factory, moduleId, deps) {
+        modules[moduleId] = { factory, deps, loaded: false };
+        console.log('[Fixture] __d registered module:', moduleId);
+      };
+
+      // Register the extension detection module AFTER a delay,
+      // simulating Meta's async bundle loading
+      setTimeout(function() {
+        window.__d(function(require, module, exports) {
+          module.exports = {
+            isBrowserExtensionError: function(err) {
+              // Real Meta implementation checks stack traces for chrome-extension://
+              return err && err.stack && err.stack.indexOf('chrome-extension://') !== -1;
+            },
+            maybeReportBrowserExtensionError: function(err) {
+              if (this.isBrowserExtensionError(err)) {
+                console.error('[Meta] Browser extension error detected!');
+                document.body.setAttribute('data-extension-detected', 'true');
+              }
+            },
+          };
+        }, 'AdsBrowserExtensionErrorUtils', []);
+      }, 500);
+
+      // Expose module registry for test assertions
+      window.__testModuleRegistry = modules;
+    })();
+
+    // ───────────────────────────────────────────────────────
+    // 3. Interactive elements
+    // ───────────────────────────────────────────────────────
+    document.querySelectorAll('.objective-card').forEach(card => {
+      card.addEventListener('click', function() {
+        document.querySelectorAll('.objective-card').forEach(c => {
+          c.setAttribute('aria-checked', 'false');
+          c.setAttribute('aria-selected', 'false');
+          c.classList.remove('selected');
+          c.removeAttribute('data-selected');
+        });
+        this.setAttribute('aria-checked', 'true');
+        this.setAttribute('aria-selected', 'true');
+        this.classList.add('selected');
+        this.setAttribute('data-selected', 'true');
+      });
+    });
+
+    document.querySelector('.ams-switch').addEventListener('click', function() {
+      const checked = this.getAttribute('aria-checked') === 'true';
+      this.setAttribute('aria-checked', String(!checked));
+    });
+
+    // Publish button shows the confirmation dialog (simulates Meta's behavior)
+    document.querySelector('[data-testid="publish-button"]').addEventListener('click', function(e) {
+      e.preventDefault();
+      const dialog = document.getElementById('publish-confirm-dialog');
+      dialog.classList.add('active');
+      console.log('[Fixture] Publish dialog shown');
+    });
+
+    document.querySelector('[data-testid="publish-cancel-btn"]').addEventListener('click', function() {
+      document.getElementById('publish-confirm-dialog').classList.remove('active');
+    });
+  </script>
+</body>
+</html>

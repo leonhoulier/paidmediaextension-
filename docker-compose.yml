@@ -1,0 +1,46 @@
+services:
+  # PostgreSQL database (compatible with Cloud SQL)
+  postgres:
+    image: postgres:16-alpine
+    container_name: mbg-postgres
+    environment:
+      POSTGRES_DB: media_buying_governance
+      POSTGRES_USER: mbg_dev
+      POSTGRES_PASSWORD: dev_password_changeme
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mbg_dev']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Google Cloud Pub/Sub emulator
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+    container_name: mbg-pubsub-emulator
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+    ports:
+      - '8085:8085'
+    environment:
+      PUBSUB_PROJECT_ID: local-dev
+
+  # Firebase Auth Emulator (optional - for full local stack)
+  firebase-emulator:
+    image: node:20-alpine
+    container_name: mbg-firebase-emulator
+    working_dir: /app
+    command: sh -c "npm install -g firebase-tools && firebase emulators:start --only auth"
+    ports:
+      - '9099:9099'
+      - '4000:4000'
+    volumes:
+      - ./firebase.json:/app/firebase.json
+    environment:
+      FIREBASE_PROJECT_ID: local-dev
+
+volumes:
+  postgres_data:

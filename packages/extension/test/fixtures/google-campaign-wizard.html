@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New campaign - Google Ads</title>
+  <style>
+    /*
+     * Minimal reproduction of Google Ads campaign creation wizard.
+     * Uses realistic Material Design class names, debugid attributes,
+     * and Angular-like component structures.
+     */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Google Sans', 'Roboto', Arial, sans-serif;
+      background: #f8f9fa;
+      color: #202124;
+      font-size: 14px;
+    }
+
+    /* ── App Bar ──────────────────────────────────── */
+    awsm-app-bar, .app-bar {
+      display: flex;
+      align-items: center;
+      height: 64px;
+      background: #fff;
+      border-bottom: 1px solid #dadce0;
+      padding: 0 24px;
+      gap: 16px;
+    }
+    .app-bar__logo { font-weight: 500; font-size: 20px; color: #5f6368; }
+    .app-bar__logo strong { color: #1a73e8; }
+    .app-bar__account {
+      font-size: 13px;
+      color: #5f6368;
+      margin-left: auto;
+    }
+    .customer-id { font-weight: 500; }
+
+    /* ── Wizard Layout ───────────────────────────── */
+    .wizard {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    /* ── Stepper ──────────────────────────────────── */
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+    .stepper__step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #5f6368;
+    }
+    .stepper__step--active {
+      color: #1a73e8;
+      font-weight: 500;
+    }
+    .stepper__step--completed { color: #137333; }
+    .stepper__number {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .stepper__step--active .stepper__number {
+      background: #1a73e8;
+      color: #fff;
+      border-color: #1a73e8;
+    }
+    .stepper__step--completed .stepper__number {
+      background: #137333;
+      color: #fff;
+      border-color: #137333;
+    }
+    .stepper__connector {
+      width: 40px;
+      height: 2px;
+      background: #dadce0;
+    }
+
+    /* ── Material Card ───────────────────────────── */
+    .mat-card {
+      background: #fff;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .mat-card__title {
+      font-size: 16px;
+      font-weight: 500;
+      color: #202124;
+      margin-bottom: 20px;
+    }
+
+    /* ── Material Input ──────────────────────────── */
+    material-input {
+      display: block;
+      margin-bottom: 16px;
+    }
+    .mat-form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .mat-form-field__label {
+      font-size: 12px;
+      color: #5f6368;
+      font-weight: 500;
+    }
+    .mat-input-element {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 200ms;
+      background: #fff;
+    }
+    .mat-input-element:focus {
+      border-color: #1a73e8;
+      border-width: 2px;
+      padding: 11px 15px;
+    }
+
+    /* ── Material Select / Listbox ────────────────── */
+    .mat-select, [role="listbox"] {
+      padding: 12px 16px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* ── Location targeting panel ─────────────────── */
+    .location-targeting-panel {
+      padding: 8px 0;
+    }
+    .selected-location, .location-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #f1f3f4;
+      font-size: 14px;
+    }
+    .selected-location:last-child { border-bottom: none; }
+    .location-icon { color: #5f6368; }
+    .location-remove { margin-left: auto; color: #5f6368; cursor: pointer; font-size: 18px; }
+
+    /* ── Language section ──────────────────────────── */
+    .language-targeting-section { padding: 8px 0; }
+    .selected-language {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: #e8f0fe;
+      color: #1a73e8;
+      border-radius: 16px;
+      font-size: 13px;
+      margin: 4px;
+    }
+
+    /* ── Brand safety section ─────────────────────── */
+    .content-exclusion-section { padding: 8px 0; }
+    .excluded-category {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: #fce8e6;
+      color: #c5221f;
+      border-radius: 16px;
+      font-size: 13px;
+      margin: 4px;
+    }
+
+    /* ── Bidding section ──────────────────────────── */
+    .bidding-strategy-section { margin-bottom: 16px; }
+
+    /* ── Budget section ──────────────────────────── */
+    .budget-section { margin-bottom: 16px; }
+
+    /* ── Bottom bar ──────────────────────────────── */
+    .bottom-section {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top: 1px solid #dadce0;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      z-index: 100;
+    }
+    .mat-button {
+      padding: 10px 24px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid #dadce0;
+      background: #fff;
+      color: #1a73e8;
+    }
+    .mat-button.primary {
+      background: #1a73e8;
+      color: #fff;
+      border-color: #1a73e8;
+    }
+    .mat-button.primary:hover { background: #1765cc; }
+
+    /* ── Schedule section ─────────────────────────── */
+    .schedule-section { display: flex; gap: 16px; }
+
+    .fixture-info {
+      background: #fef7e0;
+      border: 1px solid #f9ab00;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #5f6368;
+    }
+    .fixture-info strong { display: block; margin-bottom: 4px; color: #202124; }
+  </style>
+</head>
+<body>
+  <!-- ═══════════════════════════════════════════════════════
+       APP BAR (Google Ads header)
+       ═══════════════════════════════════════════════════════ -->
+  <awsm-app-bar class="app-bar">
+    <span class="app-bar__logo"><strong>Google</strong> Ads</span>
+    <span class="app-bar__account">
+      Account: <span class="customer-id" data-customer-id="123-456-7890">123-456-7890</span>
+    </span>
+  </awsm-app-bar>
+
+  <div class="wizard">
+
+    <!-- ─── Stepper ──────────────────────────────── -->
+    <div class="stepper">
+      <div class="stepper__step stepper__step--completed">
+        <span class="stepper__number">&#x2713;</span>
+        <span>Goal</span>
+      </div>
+      <div class="stepper__connector"></div>
+      <div class="stepper__step stepper__step--completed">
+        <span class="stepper__number">&#x2713;</span>
+        <span>Campaign type</span>
+      </div>
+      <div class="stepper__connector"></div>
+      <div class="stepper__step stepper__step--active">
+        <span class="stepper__number">3</span>
+        <span>Campaign settings</span>
+      </div>
+      <div class="stepper__connector"></div>
+      <div class="stepper__step">
+        <span class="stepper__number">4</span>
+        <span>Ad groups</span>
+      </div>
+      <div class="stepper__connector"></div>
+      <div class="stepper__step">
+        <span class="stepper__number">5</span>
+        <span>Ads</span>
+      </div>
+    </div>
+
+    <div class="fixture-info">
+      <strong>Test Fixture: Google Ads - Campaign Wizard</strong>
+      URL path should include /aw/campaigns/wizard with ?__u=123-456-7890<br/>
+      This page mimics the DOM structure that the extension's Google Ads adapter selectors target.
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         CAMPAIGN NAME
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">General settings</div>
+
+      <!--
+        GOOGLE SELECTOR TARGET: campaign.name
+        Primary:   material-input[debugid="campaign-name"] input
+        Fallback:  input[aria-label*="Campaign name" i]
+        Fallback:  .campaign-name-section input
+      -->
+      <div class="campaign-name-section">
+        <material-input debugid="campaign-name" class="mat-form-field">
+          <label class="mat-form-field__label">Campaign name</label>
+          <input
+            type="text"
+            class="mat-input-element"
+            aria-label="Campaign name"
+            name="campaign-name"
+            value="GSearch_US_Brand_Feb2026"
+          />
+        </material-input>
+      </div>
+
+      <!--
+        GOOGLE SELECTOR TARGET: campaign.type
+        Primary:   [debugid="campaign-type-selector"]
+        Fallback:  .campaign-type-section [role="radiogroup"]
+      -->
+      <div class="campaign-type-section">
+        <label class="mat-form-field__label">Campaign type</label>
+        <div debugid="campaign-type-selector" role="radiogroup" class="campaign-type-selector" style="display: flex; gap: 12px; margin-top: 8px;">
+          <div role="radio" aria-checked="true" data-campaigntype="SEARCH" style="padding: 12px 20px; border: 2px solid #1a73e8; border-radius: 4px; background: #e8f0fe;">
+            <span>Search</span>
+          </div>
+          <div role="radio" aria-checked="false" data-campaigntype="DISPLAY" style="padding: 12px 20px; border: 1px solid #dadce0; border-radius: 4px;">
+            <span>Display</span>
+          </div>
+          <div role="radio" aria-checked="false" data-campaigntype="VIDEO" style="padding: 12px 20px; border: 1px solid #dadce0; border-radius: 4px;">
+            <span>Video</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         BIDDING
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">Bidding</div>
+      <!--
+        GOOGLE SELECTOR TARGET: campaign.bidding_strategy
+        Primary:   [debugid="bidding-strategy-selector"]
+        Fallback:  .bidding-strategy-section [role="listbox"]
+        Fallback:  .bidding-section .selected-strategy
+      -->
+      <div class="bidding-strategy-section">
+        <label class="mat-form-field__label">Bid strategy</label>
+        <div
+          debugid="bidding-strategy-selector"
+          role="listbox"
+          class="mat-select"
+          style="margin-top: 8px;"
+        >
+          <div role="option" aria-selected="true" class="selected-strategy" data-biddingstrategy="MAXIMIZE_CONVERSIONS">
+            Maximize conversions
+          </div>
+          <span style="color: #5f6368;">&#x25BC;</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         BUDGET
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">Budget</div>
+      <!--
+        GOOGLE SELECTOR TARGET: campaign.budget_value
+        Primary:   material-input[debugid="budget-input"] input
+        Fallback:  input[aria-label*="Budget" i]
+        Fallback:  .budget-section input[type="number"]
+      -->
+      <div class="budget-section" data-test="budget-input">
+        <material-input debugid="budget-input" class="mat-form-field">
+          <label class="mat-form-field__label">Daily budget</label>
+          <input
+            type="number"
+            class="mat-input-element budget-input"
+            aria-label="Budget"
+            value="150"
+          />
+        </material-input>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         LOCATION TARGETING
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">Location targeting</div>
+      <!--
+        GOOGLE SELECTOR TARGET: campaign.geo_targets
+        Primary:   .location-targeting-panel .selected-location
+        Fallback:  [debugid="location-targeting"] .location-row
+      -->
+      <div class="locations-section">
+        <div class="location-targeting-panel" debugid="location-targeting">
+          <div class="selected-location location-item location-row">
+            <span class="location-icon">&#x1F4CD;</span>
+            <span>United States</span>
+            <span class="location-remove">&times;</span>
+          </div>
+          <div class="selected-location location-item location-row">
+            <span class="location-icon">&#x1F4CD;</span>
+            <span>United Kingdom</span>
+            <span class="location-remove">&times;</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         LANGUAGE TARGETING
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">Languages</div>
+      <!--
+        GOOGLE SELECTOR TARGET: campaign.languages
+        Primary:   .language-targeting-section .selected-language
+        Fallback:  [debugid="language-selector"] .selected-item
+        Fallback:  .languages-section .chip
+      -->
+      <div class="language-targeting-section languages-section" debugid="language-selector">
+        <span class="selected-language selected-item mat-chip">English</span>
+        <span class="selected-language selected-item mat-chip">Spanish</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         BRAND SAFETY / CONTENT EXCLUSIONS
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">Content exclusions</div>
+      <!--
+        GOOGLE SELECTOR TARGET: campaign.brand_safety
+        Primary:   .content-exclusion-section .excluded-category
+        Fallback:  .brand-safety-section .excluded-item
+        Fallback:  [debugid="content-exclusions"] .exclusion-item
+      -->
+      <div class="content-exclusion-section brand-safety-section" debugid="content-exclusions">
+        <span class="excluded-category excluded-item exclusion-item mat-chip">Gambling</span>
+        <span class="excluded-category excluded-item exclusion-item mat-chip">Weapons</span>
+        <span class="excluded-category excluded-item exclusion-item mat-chip">Sexual content</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         SCHEDULE
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">Schedule</div>
+      <div class="schedule-section">
+        <!--
+          GOOGLE SELECTOR TARGET: campaign.start_date
+          Primary:   material-input[debugid="start-date"] input
+          Fallback:  input[aria-label*="Start date" i]
+        -->
+        <div class="start-date-section">
+          <material-input debugid="start-date" class="mat-form-field">
+            <label class="mat-form-field__label">Start date</label>
+            <input
+              type="text"
+              class="mat-input-element"
+              aria-label="Start date"
+              value="Feb 15, 2026"
+            />
+          </material-input>
+        </div>
+
+        <!--
+          GOOGLE SELECTOR TARGET: campaign.end_date
+          Primary:   material-input[debugid="end-date"] input
+          Fallback:  input[aria-label*="End date" i]
+        -->
+        <div class="end-date-section">
+          <material-input debugid="end-date" class="mat-form-field">
+            <label class="mat-form-field__label">End date</label>
+            <input
+              type="text"
+              class="mat-input-element"
+              aria-label="End date"
+              value="Mar 15, 2026"
+            />
+          </material-input>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         AD GROUP FIELDS (Step 4 in wizard)
+         These would normally appear on a separate wizard step.
+         Included here for selector coverage testing.
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">Ad group</div>
+
+      <!--
+        GOOGLE SELECTOR TARGET: ad_group.name
+        Primary:   material-input[debugid="ad-group-name"] input
+        Fallback:  input[aria-label*="Ad group name" i]
+      -->
+      <div class="ad-group-name-section">
+        <material-input debugid="ad-group-name" class="mat-form-field">
+          <label class="mat-form-field__label">Ad group name</label>
+          <input
+            type="text"
+            class="mat-input-element"
+            aria-label="Ad group name"
+            name="ad-group-name"
+            value="Brand Terms - Exact"
+          />
+        </material-input>
+      </div>
+
+      <!--
+        GOOGLE SELECTOR TARGET: ad_group.cpc_bid
+        Primary:   material-input[debugid="default-bid"] input
+        Fallback:  input[aria-label*="Default bid" i]
+      -->
+      <div class="bid-section">
+        <material-input debugid="default-bid" class="mat-form-field">
+          <label class="mat-form-field__label">Default bid</label>
+          <input
+            type="text"
+            class="mat-input-element"
+            aria-label="Default bid"
+            value="$2.50"
+          />
+        </material-input>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         AD-LEVEL FIELDS (Step 5 in wizard)
+         RSA headlines, descriptions, final URL, display path.
+         ═══════════════════════════════════════════════════════ -->
+    <div class="mat-card">
+      <div class="mat-card__title">Responsive search ad</div>
+
+      <!--
+        GOOGLE SELECTOR TARGET: ad.headlines
+        Primary:   material-input[debugid*="headline"] input
+        Fallback:  input[aria-label*="Headline" i]
+      -->
+      <div class="headline-input">
+        <material-input debugid="headline-1" class="mat-form-field">
+          <label class="mat-form-field__label">Headline 1</label>
+          <input type="text" class="mat-input-element" aria-label="Headline 1" value="Buy Premium Shoes" />
+        </material-input>
+        <material-input debugid="headline-2" class="mat-form-field">
+          <label class="mat-form-field__label">Headline 2</label>
+          <input type="text" class="mat-input-element" aria-label="Headline 2" value="Free Shipping Today" />
+        </material-input>
+        <material-input debugid="headline-3" class="mat-form-field">
+          <label class="mat-form-field__label">Headline 3</label>
+          <input type="text" class="mat-input-element" aria-label="Headline 3" value="50% Off Sale" />
+        </material-input>
+      </div>
+
+      <!--
+        GOOGLE SELECTOR TARGET: ad.descriptions
+        Primary:   material-input[debugid*="description"] input
+        Fallback:  textarea[aria-label*="Description" i]
+        Fallback:  input[aria-label*="Description" i]
+      -->
+      <div class="description-input">
+        <material-input debugid="description-1" class="mat-form-field">
+          <label class="mat-form-field__label">Description 1</label>
+          <input type="text" class="mat-input-element" aria-label="Description 1" value="Shop the best selection of premium shoes." />
+        </material-input>
+        <material-input debugid="description-2" class="mat-form-field">
+          <label class="mat-form-field__label">Description 2</label>
+          <input type="text" class="mat-input-element" aria-label="Description 2" value="Free returns within 30 days." />
+        </material-input>
+      </div>
+
+      <!--
+        GOOGLE SELECTOR TARGET: ad.final_url
+        Primary:   material-input[debugid="final-url"] input
+        Fallback:  input[aria-label*="Final URL" i]
+      -->
+      <div class="final-url-section url-section">
+        <material-input debugid="final-url" class="mat-form-field">
+          <label class="mat-form-field__label">Final URL</label>
+          <input
+            type="url"
+            class="mat-input-element"
+            aria-label="Final URL"
+            name="final-url"
+            value="https://example.com/shoes"
+          />
+        </material-input>
+      </div>
+
+      <!--
+        GOOGLE SELECTOR TARGET: ad.display_path
+        Primary:   material-input[debugid*="display-path"] input
+        Fallback:  input[aria-label*="Display path" i]
+        NOTE: The broad input[aria-label*="Path" i] selector has been removed.
+      -->
+      <div class="display-path-section">
+        <material-input debugid="display-path-1" class="mat-form-field">
+          <label class="mat-form-field__label">Display path 1</label>
+          <input type="text" class="mat-input-element" aria-label="Display path 1" value="shoes" />
+        </material-input>
+        <material-input debugid="display-path-2" class="mat-form-field">
+          <label class="mat-form-field__label">Display path 2</label>
+          <input type="text" class="mat-input-element" aria-label="Display path 2" value="sale" />
+        </material-input>
+      </div>
+
+      <!--
+        DECOY: This input has aria-label="File path" and should NOT be matched
+        by the display path selector. Tests confirm that the narrowed selector
+        does not produce false positives.
+      -->
+      <div class="unrelated-section" style="margin-top: 16px; padding: 12px; border: 1px dashed #dadce0;">
+        <label class="mat-form-field__label">Tracking template (decoy)</label>
+        <input type="text" class="mat-input-element" aria-label="File path" value="/tracking/path" />
+      </div>
+    </div>
+
+    <!-- Real Google Ads uses Shadow DOM for some Material components.
+         Shadow DOM piercing is tested separately via programmatic shadow root
+         attachment in unit tests. Static HTML cannot simulate true Shadow DOM. -->
+
+  </div><!-- /.wizard -->
+
+  <!-- ═══════════════════════════════════════════════════════
+       BOTTOM BAR (Create campaign button)
+       ═══════════════════════════════════════════════════════ -->
+  <!--
+    GOOGLE SELECTOR TARGET: publish_button
+    Primary:   button[type="submit"]
+    Fallback:  .bottom-section button.primary
+    Text:      "Create campaign"
+  -->
+  <div class="bottom-section">
+    <button class="mat-button">Back</button>
+    <button type="submit" class="mat-button primary" data-test="create-button">
+      Create campaign
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       INTERACTIVE BEHAVIOR (minimal, for manual testing)
+       ═══════════════════════════════════════════════════════ -->
+  <script>
+    // Campaign type cards
+    document.querySelectorAll('[data-campaigntype]').forEach(card => {
+      card.addEventListener('click', function() {
+        document.querySelectorAll('[data-campaigntype]').forEach(c => {
+          c.setAttribute('aria-checked', 'false');
+          c.style.borderColor = '#dadce0';
+          c.style.background = '#fff';
+          c.style.borderWidth = '1px';
+        });
+        this.setAttribute('aria-checked', 'true');
+        this.style.borderColor = '#1a73e8';
+        this.style.background = '#e8f0fe';
+        this.style.borderWidth = '2px';
+      });
+    });
+
+    console.log('[Fixture] Google Ads Campaign Wizard fixture loaded');
+  </script>
+</body>
+</html>

@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ad Set | Ads Manager</title>
+  <style>
+    /*
+     * Minimal reproduction of Meta Ads Manager ad set creation form.
+     * Targets: ad_set.name, ad_set.targeting.geo_locations,
+     * ad_set.targeting.genders, ad_set.targeting.languages,
+     * ad_set.placements, ad_set.schedule.*
+     */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      background: #f0f2f5;
+      color: #1c1e21;
+      font-size: 14px;
+    }
+
+    /* ── Top Nav ─────────────────────────────────── */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #dddfe2;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+    }
+    .topbar__brand { font-weight: 700; font-size: 18px; color: #1877f2; }
+    .topbar__account { font-size: 13px; color: #65676b; margin-left: auto; }
+
+    .ams-layout {
+      display: flex;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      gap: 24px;
+    }
+    .ams-main { flex: 1; }
+    .ams-sidebar { width: 320px; flex-shrink: 0; }
+
+    .ams-card {
+      background: #fff;
+      border: 1px solid #dddfe2;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .ams-card__title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .ams-field { margin-bottom: 16px; }
+    .ams-field__label {
+      display: block;
+      font-size: 13px;
+      color: #65676b;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .ams-field__input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #dddfe2;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+    }
+    .ams-field__input:focus { border-color: #1877f2; }
+
+    /* ── Chips / Tags ────────────────────────────── */
+    .chip-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 0;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #e7f3ff;
+      color: #1877f2;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .chip__remove {
+      cursor: pointer;
+      font-size: 11px;
+      color: #65676b;
+    }
+
+    /* ── Radio / Checkbox rows ───────────────────── */
+    .radio-row, .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      cursor: pointer;
+    }
+    .radio-indicator, .checkbox-indicator {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #65676b;
+      border-radius: 50%;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .checkbox-indicator { border-radius: 4px; }
+    .radio-row[aria-checked="true"] .radio-indicator {
+      border-color: #1877f2;
+    }
+    .radio-row[aria-checked="true"] .radio-indicator::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #1877f2;
+    }
+    .checkbox-row[aria-checked="true"] .checkbox-indicator {
+      border-color: #1877f2;
+      background: #1877f2;
+    }
+    .checkbox-row[aria-checked="true"] .checkbox-indicator::after {
+      content: '\2713';
+      color: #fff;
+      font-size: 12px;
+      position: absolute;
+      top: -1px; left: 2px;
+    }
+
+    /* ── Placement section ───────────────────────── */
+    .placement-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f2f5;
+    }
+    .placement-option:last-child { border-bottom: none; }
+
+    /* ── Publish bar ─────────────────────────────── */
+    .publish-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top: 1px solid #dddfe2;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      z-index: 100;
+    }
+    .publish-bar__btn {
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+    }
+    .publish-bar__btn--secondary { background: #e4e6eb; color: #1c1e21; }
+    .publish-bar__btn--primary { background: #1877f2; color: #fff; }
+
+    .fixture-info {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #664d03;
+    }
+    .fixture-info strong { display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="topbar__brand">Ads Manager</span>
+    <span class="topbar__account">Account: act_1639086456168798</span>
+  </div>
+
+  <div class="ams-layout">
+    <div class="ams-main">
+
+      <div class="fixture-info">
+        <strong>Test Fixture: Meta Ads Manager - Ad Set Creation</strong>
+        URL params should include: ?act=1639086456168798&amp;tool=ADGROUP_CREATION_FLOW<br/>
+        This page targets ad set-level selectors.
+      </div>
+
+      <!-- ─── Ad Set Name ──────────────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Ad set name</div>
+        <div class="ams-field">
+          <!--
+            META SELECTOR TARGET: ad_set.name
+            Primary:   input[aria-label*="Ad set name"]
+            data-testid: [data-testid*="adset-name"] input
+            Heuristic: input near "Ad set name" label
+          -->
+          <div data-testid="adset-name-input" class="_3-90">
+            <div class="_3-91">
+              <input
+                type="text"
+                aria-label="Ad set name"
+                value="US_Traffic_18-65_M+F"
+                class="ams-field__input _1reg"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Locations ────────────────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Audience</div>
+
+        <!--
+          META SELECTOR TARGET: ad_set.targeting.geo_locations
+          Primary:   [aria-label*="Location"]
+          data-testid: [data-testid*="location"]
+          Text:      span containing "Locations"
+        -->
+        <div class="ams-field">
+          <span class="ams-field__label">Locations</span>
+          <div
+            aria-label="Locations"
+            data-testid="location-targeting-section"
+            class="_3qn7 _61-3"
+          >
+            <input
+              type="text"
+              placeholder="Search locations..."
+              class="ams-field__input"
+              style="margin-bottom: 8px;"
+            />
+            <div class="chip-container">
+              <span class="chip" role="listitem" data-testid="location-tag-US">
+                United States <span class="chip__remove">&times;</span>
+              </span>
+              <span class="chip" role="listitem" data-testid="location-tag-CA">
+                Canada <span class="chip__remove">&times;</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── Age Range ──────────────────────────── -->
+        <!--
+          META SELECTOR TARGET: ad_set.targeting.age_range
+          Primary:   [aria-label*="Age"]
+          data-testid: [data-testid*="age-range"]
+          Text:      span containing "Age"
+        -->
+        <div class="ams-field">
+          <span class="ams-field__label">Age</span>
+          <div aria-label="Age range" data-testid="age-range-selector" class="_3qn8" style="display: flex; gap: 12px; align-items: center;">
+            <input type="number" value="18" min="13" max="65" style="width: 70px;" class="ams-field__input" />
+            <span>to</span>
+            <input type="number" value="65" min="13" max="65" style="width: 70px;" class="ams-field__input" />
+          </div>
+        </div>
+
+        <!-- ─── Gender ─────────────────────────────── -->
+        <!--
+          META SELECTOR TARGET: ad_set.targeting.genders
+          Primary:   [aria-label*="Gender"]
+          data-testid: [data-testid*="gender"]
+          Text:      span containing "Gender"
+        -->
+        <div class="ams-field">
+          <span class="ams-field__label">Gender</span>
+          <div aria-label="Gender" data-testid="gender-selection" class="_3qn9">
+            <label class="radio-row" aria-checked="true" role="radio">
+              <span class="radio-indicator"></span>
+              <input type="radio" name="gender" value="all" checked style="display:none;" />
+              <span>All genders</span>
+            </label>
+            <label class="radio-row" aria-checked="false" role="radio">
+              <span class="radio-indicator"></span>
+              <input type="radio" name="gender" value="male" style="display:none;" />
+              <span>Men</span>
+            </label>
+            <label class="radio-row" aria-checked="false" role="radio">
+              <span class="radio-indicator"></span>
+              <input type="radio" name="gender" value="female" style="display:none;" />
+              <span>Women</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- ─── Languages ──────────────────────────── -->
+        <!--
+          META SELECTOR TARGET: ad_set.targeting.languages
+          Primary:   [aria-label*="Language"]
+          data-testid: [data-testid*="language"]
+          Text:      span containing "Languages"
+        -->
+        <div class="ams-field">
+          <span class="ams-field__label">Languages</span>
+          <div aria-label="Languages" data-testid="language-targeting-section" class="_3qna">
+            <div class="chip-container">
+              <span class="chip" role="listitem" data-testid="language-tag-en">
+                English <span class="chip__remove">&times;</span>
+              </span>
+              <span class="chip" role="listitem" data-testid="language-tag-fr">
+                French <span class="chip__remove">&times;</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Custom Audiences ─────────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Custom Audiences</div>
+        <!--
+          META SELECTOR TARGET: ad_set.targeting.custom_audiences
+          Primary:   [data-testid*="custom-audience"]
+          aria-label: [aria-label*="Custom audience" i]
+          Text:      span containing "Custom Audiences"
+        -->
+        <div class="ams-field">
+          <span class="ams-field__label">Custom Audiences</span>
+          <div
+            data-testid="custom-audience-picker"
+            aria-label="Custom Audiences"
+            class="_3qnc"
+          >
+            <div class="chip-container">
+              <span class="chip audience-chip" role="listitem" data-testid="audience-tag-retargeting">
+                Retargeting - Website Visitors <span class="chip__remove">&times;</span>
+              </span>
+              <span class="chip audience-chip" role="listitem" data-testid="audience-tag-lookalike">
+                Lookalike - Email List <span class="chip__remove">&times;</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Placements ──────────────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Placements</div>
+        <!--
+          META SELECTOR TARGET: ad_set.placements
+          Primary:   [aria-label*="Placement"]
+          data-testid: [data-testid*="placement"]
+          Text:      span containing "Placements"
+        -->
+        <div aria-label="Placements" data-testid="placement-section" class="_3qnb">
+          <label class="checkbox-row" aria-checked="true" role="checkbox">
+            <span class="checkbox-indicator"></span>
+            <input type="checkbox" checked style="display:none;" />
+            <span>Advantage+ placements (Recommended)</span>
+          </label>
+          <label class="checkbox-row" aria-checked="false" role="checkbox">
+            <span class="checkbox-indicator"></span>
+            <input type="checkbox" style="display:none;" />
+            <span>Manual placements</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- ─── Schedule ─────────────────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Budget &amp; schedule</div>
+
+        <!--
+          META SELECTOR TARGET: ad_set.schedule.start_date
+          Primary:   [aria-label*="Start date"]
+          data-testid: [data-testid*="start-date"]
+          Heuristic: input near "Start date" label
+        -->
+        <div class="ams-field">
+          <label class="ams-field__label">Start date</label>
+          <div data-testid="start-date-picker" class="_3-90">
+            <input
+              type="text"
+              aria-label="Start date"
+              value="02/15/2026"
+              class="ams-field__input"
+            />
+          </div>
+        </div>
+
+        <!--
+          META SELECTOR TARGET: ad_set.schedule.end_date
+          Primary:   [aria-label*="End date"]
+          data-testid: [data-testid*="end-date"]
+          Heuristic: input near "End date" label
+        -->
+        <div class="ams-field">
+          <label class="ams-field__label">End date</label>
+          <div data-testid="end-date-picker" class="_3-90">
+            <input
+              type="text"
+              aria-label="End date"
+              value="03/15/2026"
+              class="ams-field__input"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════
+           AD-LEVEL FIELDS
+           These would normally be on a separate step/page in
+           Meta Ads Manager. Included here for selector coverage.
+           ═══════════════════════════════════════════════════════ -->
+
+      <!-- ─── Ad Name ──────────────────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Ad</div>
+        <!--
+          META SELECTOR TARGET: ad.name
+          Primary:   input[aria-label*="Ad name"]
+          data-testid: [data-testid*="ad-name"] input
+          Heuristic: input near "Ad name" label
+        -->
+        <div class="ams-field">
+          <label class="ams-field__label">Ad name</label>
+          <div data-testid="ad-name-input" class="_3-90">
+            <input
+              type="text"
+              aria-label="Ad name"
+              value="Video_15s_LearnMore"
+              class="ams-field__input"
+            />
+          </div>
+        </div>
+
+        <!-- ─── Destination URL ────────────────────── -->
+        <!--
+          META SELECTOR TARGET: ad.creative.destination_url
+          Primary:   input[aria-label*="Website URL"]
+          data-testid: [data-testid*="destination-url"] input
+          Heuristic: input near "Website URL" label
+        -->
+        <div class="ams-field">
+          <label class="ams-field__label">Website URL</label>
+          <div data-testid="destination-url-input" class="_3-90">
+            <input
+              type="url"
+              aria-label="Website URL"
+              value="https://example.com/landing?utm_source=meta"
+              class="ams-field__input"
+            />
+          </div>
+        </div>
+
+        <!-- ─── CTA Type ──────────────────────────── -->
+        <!--
+          META SELECTOR TARGET: ad.creative.cta_type
+          Primary:   [aria-label*="Call to action"]
+          data-testid: [data-testid*="cta"]
+          Text:      span containing "Call to action"
+        -->
+        <div class="ams-field">
+          <span class="ams-field__label">Call to action</span>
+          <div aria-label="Call to action" data-testid="cta-type-selector" class="_3-90">
+            <div aria-selected="true" class="selected">Learn More</div>
+            <div>Shop Now</div>
+            <div>Sign Up</div>
+          </div>
+        </div>
+
+        <!-- ─── Facebook Page ──────────────────────── -->
+        <!--
+          META SELECTOR TARGET: ad.creative.page_id
+          Primary:   [aria-label*="Facebook Page"]
+          data-testid: [data-testid*="page-selector"]
+          Text:      span containing "Facebook Page"
+        -->
+        <div class="ams-field">
+          <span class="ams-field__label">Facebook Page</span>
+          <div
+            aria-label="Facebook Page"
+            data-testid="page-selector"
+            data-page-id="12345678"
+            class="_3-90"
+          >
+            <div aria-selected="true" class="selected">My Business Page</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.ams-main -->
+
+    <div class="ams-sidebar">
+      <div class="ams-card">
+        <div class="ams-card__title">Audience summary</div>
+        <p style="font-size: 13px; color: #65676b;">
+          Targeting <strong>United States, Canada</strong><br/>
+          Ages <strong>18-65</strong>, <strong>All genders</strong><br/>
+          Languages: <strong>English, French</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Publish bar ─────────────────────────────── -->
+  <div class="publish-bar">
+    <button class="publish-bar__btn publish-bar__btn--secondary">Back</button>
+    <button type="submit" class="publish-bar__btn publish-bar__btn--primary" data-testid="publish-button">
+      Next
+    </button>
+  </div>
+
+  <!-- React Fiber simulation -->
+  <script>
+    (function simulateReactFiber() {
+      const fiberKey = '__reactFiber$mock' + Math.random().toString(36).slice(2, 8);
+
+      const adsetNameInput = document.querySelector('input[aria-label="Ad set name"]');
+      if (adsetNameInput) {
+        adsetNameInput[fiberKey] = {
+          memoizedProps: { value: adsetNameInput.value },
+          return: { type: { displayName: 'AdSetNameInput' }, memoizedProps: { value: adsetNameInput.value }, return: null },
+          type: { displayName: 'input' },
+        };
+      }
+
+      const locationSection = document.querySelector('[aria-label="Locations"]');
+      if (locationSection) {
+        locationSection[fiberKey] = {
+          memoizedProps: { locations: ['US', 'CA'] },
+          return: { type: { displayName: 'LocationTargeting' }, memoizedProps: { geoLocations: { countries: ['US', 'CA'] } }, return: null },
+          type: { displayName: 'div' },
+        };
+      }
+
+      const genderSection = document.querySelector('[aria-label="Gender"]');
+      if (genderSection) {
+        genderSection[fiberKey] = {
+          memoizedProps: { value: [0], genders: ['All'] },
+          return: { type: { displayName: 'GenderSelector' }, memoizedProps: { value: [0] }, return: null },
+          type: { displayName: 'div' },
+        };
+      }
+
+      const langSection = document.querySelector('[aria-label="Languages"]');
+      if (langSection) {
+        langSection[fiberKey] = {
+          memoizedProps: { languages: ['en', 'fr'] },
+          return: { type: { displayName: 'LanguageSelector' }, memoizedProps: { languages: ['en', 'fr'] }, return: null },
+          type: { displayName: 'div' },
+        };
+      }
+
+      console.log('[Fixture] React Fiber simulation attached with key:', fiberKey);
+    })();
+
+    // Make gender radios interactive
+    document.querySelectorAll('.radio-row').forEach(row => {
+      row.addEventListener('click', function() {
+        document.querySelectorAll('.radio-row').forEach(r => r.setAttribute('aria-checked', 'false'));
+        this.setAttribute('aria-checked', 'true');
+        this.querySelector('input').checked = true;
+      });
+    });
+
+    // Make placement checkboxes interactive
+    document.querySelectorAll('.checkbox-row').forEach(row => {
+      row.addEventListener('click', function() {
+        const current = this.getAttribute('aria-checked') === 'true';
+        this.setAttribute('aria-checked', String(!current));
+        this.querySelector('input').checked = !current;
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,770 @@
+/**
+ * Meta Ads Manager Governance Theme
+ *
+ * Styles for injected governance components that match Meta Ads Manager's
+ * design language. Uses CSS custom properties for easy theming.
+ *
+ * Design tokens sourced from Section 12.3 of the specification.
+ *
+ * z-index strategy:
+ *   - Inline banners: auto (flow with DOM)
+ *   - Sidebar: 2147483000 (above all platform UI)
+ *   - Modals/overlays: 2147483000 (above all platform UI)
+ *   - Backdrop: 2147482999 (just below modals)
+ */
+
+/* ---------------------------------------------------------------------------
+ * Design Tokens (CSS Custom Properties)
+ * ------------------------------------------------------------------------ */
+
+:root {
+  /* Error (blocking rules) */
+  --meta-error-bg: #FEE2E2;
+  --meta-error-text: #991B1B;
+  --meta-error-border: #EF4444;
+
+  /* Success (passed rules) */
+  --meta-success-bg: #D1FAE5;
+  --meta-success-text: #065F46;
+  --meta-success-border: #10B981;
+
+  /* Warning (non-blocking violations) */
+  --meta-warning-bg: #FEF3C7;
+  --meta-warning-text: #92400E;
+  --meta-warning-border: #F59E0B;
+
+  /* Info (informational messages) */
+  --meta-info-bg: #DBEAFE;
+  --meta-info-text: #1E40AF;
+  --meta-info-border: #3B82F6;
+
+  /* Neutral */
+  --meta-neutral-bg: #F3F4F6;
+  --meta-neutral-text: #374151;
+  --meta-neutral-border: #D1D5DB;
+
+  /* Layout */
+  --meta-border-radius: 8px;
+  --meta-border-radius-sm: 4px;
+  --meta-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --meta-font-size-sm: 12px;
+  --meta-font-size-base: 14px;
+  --meta-font-size-lg: 16px;
+  --meta-font-size-xl: 18px;
+  --meta-line-height: 1.5;
+
+  /* Spacing */
+  --meta-spacing-xs: 4px;
+  --meta-spacing-sm: 8px;
+  --meta-spacing-md: 12px;
+  --meta-spacing-lg: 16px;
+  --meta-spacing-xl: 24px;
+
+  /* Elevation */
+  --meta-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --meta-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --meta-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  /* Overlay */
+  --meta-z-index: 2147483000;
+  --meta-backdrop: #0f172aa6;
+}
+
+/* ---------------------------------------------------------------------------
+ * Base Governance Container
+ * ------------------------------------------------------------------------ */
+
+.governance-container {
+  font-family: var(--meta-font-family);
+  font-size: var(--meta-font-size-base);
+  line-height: var(--meta-line-height);
+  color: var(--meta-neutral-text);
+  box-sizing: border-box;
+}
+
+.governance-container *,
+.governance-container *::before,
+.governance-container *::after {
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------------------
+ * Inline Banners (injected next to fields)
+ * ------------------------------------------------------------------------ */
+
+.governance-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--meta-spacing-sm);
+  padding: var(--meta-spacing-md) var(--meta-spacing-lg);
+  margin-top: var(--meta-spacing-sm);
+  border-radius: var(--meta-border-radius);
+  font-family: var(--meta-font-family);
+  font-size: var(--meta-font-size-sm);
+  line-height: var(--meta-line-height);
+  animation: governance-slide-in 0.2s ease-out;
+}
+
+.governance-banner-error {
+  background: var(--meta-error-bg);
+  color: var(--meta-error-text);
+  border: 2px solid var(--meta-error-border);
+}
+
+.governance-banner-warning {
+  background: var(--meta-warning-bg);
+  color: var(--meta-warning-text);
+  border: 2px solid var(--meta-warning-border);
+}
+
+.governance-banner-success {
+  background: var(--meta-success-bg);
+  color: var(--meta-success-text);
+  border: 2px solid var(--meta-success-border);
+}
+
+.governance-banner-info {
+  background: var(--meta-info-bg);
+  color: var(--meta-info-text);
+  border: 2px solid var(--meta-info-border);
+}
+
+.governance-banner-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.governance-banner-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.governance-banner-title {
+  font-weight: 600;
+  margin-bottom: var(--meta-spacing-xs);
+}
+
+.governance-banner-message {
+  opacity: 0.9;
+}
+
+.governance-banner-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--meta-spacing-xs);
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  color: inherit;
+}
+
+.governance-banner-dismiss:hover {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Governance Sidebar (fixed panel)
+ * ------------------------------------------------------------------------ */
+
+.governance-sidebar {
+  position: fixed;
+  right: 20px;
+  top: 100px;
+  width: 320px;
+  max-height: calc(100vh - 140px);
+  background: white;
+  box-shadow: var(--meta-shadow-md);
+  border-radius: var(--meta-border-radius);
+  z-index: var(--meta-z-index);
+  font-family: var(--meta-font-family);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: governance-slide-left 0.3s ease-out;
+}
+
+.governance-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--meta-spacing-lg);
+  border-bottom: 1px solid var(--meta-neutral-border);
+  background: var(--meta-neutral-bg);
+}
+
+.governance-sidebar-header h3 {
+  margin: 0;
+  font-size: var(--meta-font-size-lg);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--meta-spacing-sm);
+}
+
+.governance-sidebar-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--meta-spacing-xs);
+  border-radius: var(--meta-border-radius-sm);
+  color: var(--meta-neutral-text);
+  transition: background 0.15s;
+}
+
+.governance-sidebar-close:hover {
+  background: var(--meta-neutral-border);
+}
+
+.governance-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--meta-spacing-lg);
+}
+
+.governance-sidebar-footer {
+  padding: var(--meta-spacing-md) var(--meta-spacing-lg);
+  border-top: 1px solid var(--meta-neutral-border);
+  font-size: var(--meta-font-size-sm);
+  color: #9CA3AF;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+ * Compliance Score Badge
+ * ------------------------------------------------------------------------ */
+
+.governance-score {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--meta-spacing-sm);
+  padding: var(--meta-spacing-xs) var(--meta-spacing-md);
+  border-radius: 20px;
+  font-family: var(--meta-font-family);
+  font-size: var(--meta-font-size-sm);
+  font-weight: 600;
+}
+
+.governance-score-high {
+  background: var(--meta-success-bg);
+  color: var(--meta-success-text);
+  border: 1px solid var(--meta-success-border);
+}
+
+.governance-score-medium {
+  background: var(--meta-warning-bg);
+  color: var(--meta-warning-text);
+  border: 1px solid var(--meta-warning-border);
+}
+
+.governance-score-low {
+  background: var(--meta-error-bg);
+  color: var(--meta-error-text);
+  border: 1px solid var(--meta-error-border);
+}
+
+.governance-score-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--meta-font-size-sm);
+  font-weight: 700;
+}
+
+.governance-score-high .governance-score-circle {
+  background: var(--meta-success-border);
+  color: white;
+}
+
+.governance-score-medium .governance-score-circle {
+  background: var(--meta-warning-border);
+  color: white;
+}
+
+.governance-score-low .governance-score-circle {
+  background: var(--meta-error-border);
+  color: white;
+}
+
+/* ---------------------------------------------------------------------------
+ * Rule List Items (inside sidebar)
+ * ------------------------------------------------------------------------ */
+
+.governance-rule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--meta-spacing-sm);
+  padding: var(--meta-spacing-md);
+  border-radius: var(--meta-border-radius);
+  margin-bottom: var(--meta-spacing-sm);
+  transition: background 0.15s;
+}
+
+.governance-rule-item:hover {
+  background: var(--meta-neutral-bg);
+}
+
+.governance-rule-item-passed {
+  border-left: 3px solid var(--meta-success-border);
+}
+
+.governance-rule-item-failed {
+  border-left: 3px solid var(--meta-error-border);
+}
+
+.governance-rule-item-warning {
+  border-left: 3px solid var(--meta-warning-border);
+}
+
+.governance-rule-item-pending {
+  border-left: 3px solid var(--meta-neutral-border);
+}
+
+.governance-rule-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+.governance-rule-icon-pass {
+  background: var(--meta-success-border);
+  color: white;
+}
+
+.governance-rule-icon-fail {
+  background: var(--meta-error-border);
+  color: white;
+}
+
+.governance-rule-icon-warn {
+  background: var(--meta-warning-border);
+  color: white;
+}
+
+.governance-rule-icon-pending {
+  background: var(--meta-neutral-border);
+  color: white;
+}
+
+.governance-rule-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.governance-rule-name {
+  font-weight: 600;
+  font-size: var(--meta-font-size-sm);
+  margin-bottom: 2px;
+}
+
+.governance-rule-message {
+  font-size: var(--meta-font-size-sm);
+  opacity: 0.8;
+}
+
+/* ---------------------------------------------------------------------------
+ * Creation Blocker Overlay
+ * ------------------------------------------------------------------------ */
+
+.governance-blocker-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--meta-backdrop);
+  z-index: calc(var(--meta-z-index) - 1);
+  animation: governance-fade-in 0.2s ease-out;
+}
+
+.governance-blocker-overlay {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 480px;
+  max-width: 90vw;
+  background: white;
+  border-radius: var(--meta-border-radius);
+  box-shadow: var(--meta-shadow-lg);
+  z-index: var(--meta-z-index);
+  font-family: var(--meta-font-family);
+  animation: governance-scale-in 0.2s ease-out;
+}
+
+.governance-blocker-header {
+  display: flex;
+  align-items: center;
+  gap: var(--meta-spacing-sm);
+  padding: var(--meta-spacing-xl);
+  border-bottom: 1px solid var(--meta-neutral-border);
+}
+
+.governance-blocker-header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--meta-error-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.governance-blocker-title {
+  font-size: var(--meta-font-size-xl);
+  font-weight: 700;
+  color: var(--meta-error-text);
+}
+
+.governance-blocker-body {
+  padding: var(--meta-spacing-xl);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.governance-blocker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--meta-spacing-sm);
+  padding: var(--meta-spacing-lg) var(--meta-spacing-xl);
+  border-top: 1px solid var(--meta-neutral-border);
+  background: var(--meta-neutral-bg);
+  border-radius: 0 0 var(--meta-border-radius) var(--meta-border-radius);
+}
+
+/* ---------------------------------------------------------------------------
+ * Comment Modal (for comment_required enforcement)
+ * ------------------------------------------------------------------------ */
+
+.governance-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--meta-backdrop);
+  z-index: calc(var(--meta-z-index) - 1);
+  animation: governance-fade-in 0.2s ease-out;
+}
+
+.governance-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 440px;
+  max-width: 90vw;
+  background: white;
+  border-radius: var(--meta-border-radius);
+  box-shadow: var(--meta-shadow-lg);
+  z-index: var(--meta-z-index);
+  font-family: var(--meta-font-family);
+  animation: governance-scale-in 0.2s ease-out;
+}
+
+.governance-modal-header {
+  padding: var(--meta-spacing-xl);
+  border-bottom: 1px solid var(--meta-neutral-border);
+}
+
+.governance-modal-title {
+  font-size: var(--meta-font-size-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.governance-modal-body {
+  padding: var(--meta-spacing-xl);
+}
+
+.governance-modal-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: var(--meta-spacing-md);
+  border: 1px solid var(--meta-neutral-border);
+  border-radius: var(--meta-border-radius);
+  font-family: var(--meta-font-family);
+  font-size: var(--meta-font-size-base);
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+.governance-modal-textarea:focus {
+  outline: none;
+  border-color: var(--meta-info-border);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.governance-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--meta-spacing-sm);
+  padding: var(--meta-spacing-lg) var(--meta-spacing-xl);
+  border-top: 1px solid var(--meta-neutral-border);
+}
+
+/* ---------------------------------------------------------------------------
+ * Naming Convention Preview
+ * ------------------------------------------------------------------------ */
+
+.governance-naming-preview {
+  padding: var(--meta-spacing-md) var(--meta-spacing-lg);
+  margin-top: var(--meta-spacing-sm);
+  border: 1px solid var(--meta-neutral-border);
+  border-radius: var(--meta-border-radius);
+  background: var(--meta-neutral-bg);
+  font-family: var(--meta-font-family);
+  font-size: var(--meta-font-size-sm);
+}
+
+.governance-naming-label {
+  font-weight: 600;
+  margin-bottom: var(--meta-spacing-xs);
+  color: var(--meta-neutral-text);
+}
+
+.governance-naming-segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+}
+
+.governance-naming-segment {
+  padding: 2px 6px;
+  border-radius: var(--meta-border-radius-sm);
+  font-family: monospace;
+  font-size: var(--meta-font-size-sm);
+}
+
+.governance-naming-segment-valid {
+  background: var(--meta-success-bg);
+  color: var(--meta-success-text);
+}
+
+.governance-naming-segment-invalid {
+  background: var(--meta-error-bg);
+  color: var(--meta-error-text);
+}
+
+.governance-naming-segment-pending {
+  background: var(--meta-neutral-bg);
+  color: var(--meta-neutral-text);
+  border: 1px dashed var(--meta-neutral-border);
+}
+
+.governance-naming-separator {
+  color: var(--meta-neutral-border);
+  font-family: monospace;
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------------
+ * Field Highlight (border around violating fields)
+ * ------------------------------------------------------------------------ */
+
+.governance-field-highlight-error {
+  outline: 2px solid var(--meta-error-border) !important;
+  outline-offset: 2px;
+  border-radius: var(--meta-border-radius-sm);
+}
+
+.governance-field-highlight-warning {
+  outline: 2px solid var(--meta-warning-border) !important;
+  outline-offset: 2px;
+  border-radius: var(--meta-border-radius-sm);
+}
+
+.governance-field-highlight-success {
+  outline: 2px solid var(--meta-success-border) !important;
+  outline-offset: 2px;
+  border-radius: var(--meta-border-radius-sm);
+}
+
+/* ---------------------------------------------------------------------------
+ * Badges (pass/fail indicators)
+ * ------------------------------------------------------------------------ */
+
+.governance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--meta-spacing-xs);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-family: var(--meta-font-family);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.governance-badge-pass {
+  background: var(--meta-success-bg);
+  color: var(--meta-success-text);
+}
+
+.governance-badge-fail {
+  background: var(--meta-error-bg);
+  color: var(--meta-error-text);
+}
+
+.governance-badge-warn {
+  background: var(--meta-warning-bg);
+  color: var(--meta-warning-text);
+}
+
+.governance-badge-info {
+  background: var(--meta-info-bg);
+  color: var(--meta-info-text);
+}
+
+.governance-badge-pending {
+  background: var(--meta-neutral-bg);
+  color: var(--meta-neutral-text);
+}
+
+/* ---------------------------------------------------------------------------
+ * Tooltip
+ * ------------------------------------------------------------------------ */
+
+.governance-tooltip {
+  position: absolute;
+  padding: var(--meta-spacing-sm) var(--meta-spacing-md);
+  background: #1F2937;
+  color: white;
+  border-radius: var(--meta-border-radius-sm);
+  font-family: var(--meta-font-family);
+  font-size: var(--meta-font-size-sm);
+  white-space: nowrap;
+  z-index: var(--meta-z-index);
+  pointer-events: none;
+  animation: governance-fade-in 0.15s ease-out;
+}
+
+.governance-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1F2937;
+}
+
+/* ---------------------------------------------------------------------------
+ * Buttons (for modals and overlays)
+ * ------------------------------------------------------------------------ */
+
+.governance-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--meta-spacing-xs);
+  padding: var(--meta-spacing-sm) var(--meta-spacing-lg);
+  border-radius: var(--meta-border-radius);
+  font-family: var(--meta-font-family);
+  font-size: var(--meta-font-size-base);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.governance-btn-primary {
+  background: #1877F2;
+  color: white;
+}
+
+.governance-btn-primary:hover {
+  background: #166FE5;
+  box-shadow: var(--meta-shadow-sm);
+}
+
+.governance-btn-secondary {
+  background: var(--meta-neutral-bg);
+  color: var(--meta-neutral-text);
+  border: 1px solid var(--meta-neutral-border);
+}
+
+.governance-btn-secondary:hover {
+  background: #E5E7EB;
+}
+
+.governance-btn-danger {
+  background: var(--meta-error-border);
+  color: white;
+}
+
+.governance-btn-danger:hover {
+  background: #DC2626;
+  box-shadow: var(--meta-shadow-sm);
+}
+
+.governance-btn-sm {
+  padding: var(--meta-spacing-xs) var(--meta-spacing-md);
+  font-size: var(--meta-font-size-sm);
+}
+
+/* ---------------------------------------------------------------------------
+ * Animations
+ * ------------------------------------------------------------------------ */
+
+@keyframes governance-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes governance-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes governance-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes governance-scale-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Body-level State Classes (for CSS-driven validation state propagation)
+ *
+ * Applied by the adapter to document.body. Platform-specific selectors can
+ * use these to style fields without tight JS coupling.
+ * Example: body.gg-invalid-campaign-name input[aria-label*="Campaign name"]
+ * ------------------------------------------------------------------------ */
+
+body.governance-creation-blocked {
+  overflow: hidden;
+}

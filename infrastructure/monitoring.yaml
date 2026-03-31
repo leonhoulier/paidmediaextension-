@@ -1,0 +1,532 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Media Buying Governance — Monitoring Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# This file defines the monitoring setup for the MBG platform on GCP.
+# The actual resources are provisioned via Terraform (monitoring.tf).
+# This YAML serves as a human-readable reference and can also be used
+# with the gcloud CLI or Cloud Monitoring API for manual setup.
+#
+# Components:
+#   1. Uptime Check — /healthz endpoint polling
+#   2. Log-based Metrics — 5xx error counting
+#   3. Alert Policies — error rate, uptime, Cloud SQL
+#   4. Dashboard — Cloud Run + Cloud SQL overview
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1. UPTIME CHECK
+# ═══════════════════════════════════════════════════════════════════════════════
+
+uptime_check:
+  display_name: "MBG Backend Health Check"
+  monitored_resource:
+    type: uptime_url
+    labels:
+      host: "[CLOUD_RUN_URL_WITHOUT_HTTPS]"  # e.g. mbg-backend-xyz-uc.a.run.app
+      project_id: "[PROJECT_ID]"
+  http_check:
+    path: /healthz
+    port: 443
+    use_ssl: true
+    validate_ssl: true
+    accepted_response_status_codes:
+      - status_value: 200
+  period: 60s
+  timeout: 10s
+  # Checks from multiple GCP regions for reliability
+  checker_type: STATIC_IP_CHECKERS
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. LOG-BASED METRICS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+log_based_metrics:
+  # Count of 5xx responses from the backend
+  - name: mbg-backend-5xx-errors
+    description: "Server errors (HTTP 5xx) from the MBG backend Cloud Run service"
+    filter: >-
+      resource.type="cloud_run_revision"
+      AND resource.labels.service_name="mbg-backend"
+      AND httpRequest.status>=500
+    metric_descriptor:
+      metric_kind: DELTA
+      value_type: INT64
+      unit: "1"
+
+  # Count of 4xx responses (client errors — for monitoring abuse/misconfiguration)
+  - name: mbg-backend-4xx-errors
+    description: "Client errors (HTTP 4xx) from the MBG backend"
+    filter: >-
+      resource.type="cloud_run_revision"
+      AND resource.labels.service_name="mbg-backend"
+      AND httpRequest.status>=400
+      AND httpRequest.status<500
+    metric_descriptor:
+      metric_kind: DELTA
+      value_type: INT64
+      unit: "1"
+
+  # Count of slow requests (latency > 5s)
+  - name: mbg-backend-slow-requests
+    description: "Requests taking longer than 5 seconds"
+    filter: >-
+      resource.type="cloud_run_revision"
+      AND resource.labels.service_name="mbg-backend"
+      AND httpRequest.latency>"5s"
+    metric_descriptor:
+      metric_kind: DELTA
+      value_type: INT64
+      unit: "1"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. ALERT POLICIES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+alert_policies:
+  # Alert: Backend returning too many 5xx errors
+  - display_name: "MBG Backend 5xx Error Rate"
+    combiner: OR
+    conditions:
+      - display_name: "5xx errors > 5/min"
+        condition_threshold:
+          filter: >-
+            resource.type="cloud_run_revision"
+            AND metric.type="logging.googleapis.com/user/mbg-backend-5xx-errors"
+          comparison: COMPARISON_GT
+          threshold_value: 5
+          duration: 60s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+          trigger:
+            count: 1
+    notification_channels: ["[EMAIL_CHANNEL_ID]"]
+    documentation:
+      content: |
+        ## MBG Backend 5xx Error Rate Alert
+
+        The backend is returning more than 5 server errors per minute.
+
+        **Investigation Steps:**
+        1. Check Cloud Run logs: `gcloud run services logs read mbg-backend --region=us-central1 --limit=100`
+        2. Check Cloud SQL status: `gcloud sql instances describe mbg-postgres`
+        3. Check recent deployments: `gcloud run revisions list --service=mbg-backend --region=us-central1`
+
+        **Common Causes:**
+        - Database connection failures (Cloud SQL)
+        - Out of memory (increase Cloud Run memory)
+        - Unhandled exceptions in application code
+        - Secret Manager access issues
+
+  # Alert: Uptime check failure (backend down)
+  - display_name: "MBG Backend Uptime Failure"
+    combiner: OR
+    conditions:
+      - display_name: "Uptime check failure — 3 consecutive failures"
+        condition_threshold:
+          filter: >-
+            resource.type="uptime_url"
+            AND metric.type="monitoring.googleapis.com/uptime_check/check_passed"
+          comparison: COMPARISON_GT
+          threshold_value: 1
+          duration: 180s  # 3 x 60s check period
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_NEXT_OLDER
+              cross_series_reducer: REDUCE_COUNT_FALSE
+              group_by_fields:
+                - resource.label.project_id
+          trigger:
+            count: 1
+    notification_channels: ["[EMAIL_CHANNEL_ID]"]
+    documentation:
+      content: |
+        ## MBG Backend Down
+
+        The /healthz endpoint has failed 3 consecutive uptime checks.
+
+        **Immediate Actions:**
+        1. Check Cloud Run service status: `gcloud run services describe mbg-backend --region=us-central1`
+        2. Check if service has instances: Look for `min-instances` count
+        3. Check recent logs: `gcloud run services logs read mbg-backend --region=us-central1 --limit=50`
+        4. If cold start issue, consider setting min-instances > 0
+
+  # Alert: Cloud SQL connection count approaching limit
+  - display_name: "MBG Cloud SQL Connection Issues"
+    combiner: OR
+    conditions:
+      - display_name: "Connection count > 80 (limit is 100)"
+        condition_threshold:
+          filter: >-
+            resource.type="cloudsql_database"
+            AND metric.type="cloudsql.googleapis.com/database/network/connections"
+          comparison: COMPARISON_GT
+          threshold_value: 80
+          duration: 300s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+          trigger:
+            count: 1
+    notification_channels: ["[EMAIL_CHANNEL_ID]"]
+    documentation:
+      content: |
+        ## Cloud SQL Connection Limit Warning
+
+        The database connection count is approaching the maximum (100 for db-f1-micro).
+
+        **Actions:**
+        1. Check for connection leaks in application code
+        2. Verify connection pool settings in Prisma
+        3. Consider upgrading to a larger instance tier
+        4. Check Cloud Run instance count — each instance opens connections
+
+  # Alert: Cloud SQL CPU usage high
+  - display_name: "MBG Cloud SQL High CPU"
+    combiner: OR
+    conditions:
+      - display_name: "CPU utilization > 80% for 10 minutes"
+        condition_threshold:
+          filter: >-
+            resource.type="cloudsql_database"
+            AND metric.type="cloudsql.googleapis.com/database/cpu/utilization"
+          comparison: COMPARISON_GT
+          threshold_value: 0.8
+          duration: 600s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+          trigger:
+            count: 1
+    notification_channels: ["[EMAIL_CHANNEL_ID]"]
+    documentation:
+      content: |
+        ## Cloud SQL High CPU Utilization
+
+        Database CPU has been above 80% for over 10 minutes.
+
+        **Actions:**
+        1. Check slow queries: Cloud SQL > Query Insights
+        2. Review recent query patterns
+        3. Check for missing indexes
+        4. Consider upgrading instance tier from db-f1-micro
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. DASHBOARD DEFINITION
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Create manually via Cloud Console or use the gcloud CLI:
+#
+#   gcloud monitoring dashboards create --config-from-file=monitoring-dashboard.json
+#
+# Dashboard widgets:
+#   Row 1: Cloud Run Overview
+#     - Request count (by status code)
+#     - Request latency (p50, p95, p99)
+#     - Instance count
+#     - Memory utilization
+#
+#   Row 2: Cloud SQL Overview
+#     - Connection count
+#     - CPU utilization
+#     - Disk I/O (read/write)
+#     - Disk usage
+#
+#   Row 3: Application Metrics
+#     - 5xx error count (log-based metric)
+#     - 4xx error count (log-based metric)
+#     - Slow request count (log-based metric)
+#
+#   Row 4: Pub/Sub
+#     - Message publish rate
+#     - Subscription backlog
+#     - Acknowledge rate
+
+dashboard:
+  display_name: "MBG Platform Overview"
+  widgets:
+    # ─── Cloud Run ───────────────────────────────────────────────────
+    - title: "Cloud Run — Request Count by Status"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="cloud_run_revision"
+                AND resource.labels.service_name="mbg-backend"
+                AND metric.type="run.googleapis.com/request_count"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+            group_by: ["metric.labels.response_code_class"]
+
+    - title: "Cloud Run — Request Latency (p50, p95, p99)"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="cloud_run_revision"
+                AND resource.labels.service_name="mbg-backend"
+                AND metric.type="run.googleapis.com/request_latencies"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_PERCENTILE_50
+
+    - title: "Cloud Run — Instance Count"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="cloud_run_revision"
+                AND resource.labels.service_name="mbg-backend"
+                AND metric.type="run.googleapis.com/container/instance_count"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+
+    - title: "Cloud Run — Memory Utilization"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="cloud_run_revision"
+                AND resource.labels.service_name="mbg-backend"
+                AND metric.type="run.googleapis.com/container/memory/utilizations"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+
+    # ─── Cloud SQL ───────────────────────────────────────────────────
+    - title: "Cloud SQL — Connection Count"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="cloudsql_database"
+                AND metric.type="cloudsql.googleapis.com/database/network/connections"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+
+    - title: "Cloud SQL — CPU Utilization"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="cloudsql_database"
+                AND metric.type="cloudsql.googleapis.com/database/cpu/utilization"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+
+    - title: "Cloud SQL — Disk Read/Write I/O"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="cloudsql_database"
+                AND metric.type="cloudsql.googleapis.com/database/disk/read_ops_count"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+          - time_series_query:
+              filter: >-
+                resource.type="cloudsql_database"
+                AND metric.type="cloudsql.googleapis.com/database/disk/write_ops_count"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+
+    - title: "Cloud SQL — Disk Usage"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="cloudsql_database"
+                AND metric.type="cloudsql.googleapis.com/database/disk/bytes_used"
+              alignment_period: 300s
+              per_series_aligner: ALIGN_MEAN
+
+    # ─── Pub/Sub ─────────────────────────────────────────────────────
+    - title: "Pub/Sub — Message Publish Rate"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="pubsub_topic"
+                AND metric.type="pubsub.googleapis.com/topic/send_message_operation_count"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+
+    - title: "Pub/Sub — Subscription Backlog"
+      xy_chart:
+        data_sets:
+          - time_series_query:
+              filter: >-
+                resource.type="pubsub_subscription"
+                AND metric.type="pubsub.googleapis.com/subscription/num_undelivered_messages"
+              alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. SENTRY & POSTHOG INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+sentry:
+  # Sentry project configuration (managed in Sentry UI, documented here)
+  projects:
+    - name: admin-portal
+      platform: javascript-react
+      sample_rate: 1.0
+      traces_sample_rate: 0.2
+      replays_session_sample_rate: 0.1
+      replays_on_error_sample_rate: 1.0
+      filtered_events:
+        - compliance_violation
+
+    - name: backend
+      platform: node-nestjs
+      sample_rate: 1.0
+      traces_sample_rate: 0.2
+      filtered_events:
+        - compliance_violation
+
+    - name: extension
+      platform: javascript-browser
+      sample_rate: 1.0
+      traces_sample_rate: 0
+      filtered_events:
+        - compliance_violation
+      contexts:
+        - service-worker
+        - content-script
+
+  # Sentry alert rules (configured in Sentry UI)
+  alert_rules:
+    - name: "High Error Rate — Backend"
+      conditions:
+        - type: event_frequency
+          value: 10
+          interval: 1h
+      actions:
+        - type: notify_email
+        - type: notify_slack
+
+    - name: "New Issue — Admin Portal"
+      conditions:
+        - type: first_seen_event
+      actions:
+        - type: notify_email
+
+posthog:
+  # PostHog project configuration
+  projects:
+    - name: media-buying-governance
+      environments:
+        - production
+        - staging
+
+  # Sampling configuration
+  sampling:
+    admin_portal: 1.0          # 100% — low volume, high value
+    extension_critical: 1.0     # 100% — pairing, init, errors
+    extension_extraction: 0.1   # 10% — field extraction events
+
+  # Key events tracked
+  events:
+    admin_portal:
+      - rule_created
+      - rule_updated
+      - rule_deleted
+      - rule_set_activated
+      - naming_template_created
+      - compliance_event_viewed
+      - approval_request_created
+      - approval_request_resolved
+      - extension_paired
+      - webhook_configured
+
+    backend:
+      - rule_created
+      - rule_set_activated
+      - extension_paired
+      - compliance_event_logged
+      - approval_workflow_triggered
+
+    extension:
+      - extension_initialized
+      - extension_paired
+      - extension_unpaired
+      - rules_synced
+      - field_extraction_completed
+      - validation_banner_shown
+      - creation_blocked
+      - error_occurred
+
+  # Dashboard widgets (configured in PostHog UI)
+  dashboards:
+    - name: "MBG Product Analytics"
+      widgets:
+        - title: "Daily Active Users (Admin Portal)"
+          type: trends
+          events: ["$pageview"]
+          breakdown: "$current_url"
+
+        - title: "Extension Installations"
+          type: trends
+          events: ["extension_paired"]
+
+        - title: "Rules Created per Day"
+          type: trends
+          events: ["rule_created"]
+
+        - title: "Creation Blocks per Day"
+          type: trends
+          events: ["creation_blocked"]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. FEATURE FLAGS (Split.io)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+feature_flags:
+  provider: split.io
+  cache_ttl: 30s
+  refresh_rate: 30s
+
+  flags:
+    - name: enable-require-extraction
+      description: "Enable require()-based field extraction in Meta adapter"
+      default: "off"
+      targets:
+        - extension
+
+    - name: enable-expanded-rules
+      description: "Enable expanded rule types (cross_entity, advanced_naming)"
+      default: "off"
+      targets:
+        - backend
+
+    - name: enable-new-dashboard
+      description: "Show the redesigned compliance dashboard in admin portal"
+      default: "off"
+      targets:
+        - admin-portal
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7. SETUP COMMANDS (gcloud CLI — alternative to Terraform)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# If you prefer gcloud CLI over Terraform for monitoring:
+#
+# Create notification channel:
+#   gcloud alpha monitoring channels create \
+#     --display-name="MBG Alerts" \
+#     --type=email \
+#     --channel-labels=email_address=alerts@yourcompany.com
+#
+# Create uptime check:
+#   gcloud monitoring uptime create "MBG Backend Health" \
+#     --resource-type=uptime_url \
+#     --resource-labels=host=mbg-backend-xxx-uc.a.run.app,project_id=PROJECT_ID \
+#     --http-check-path=/healthz \
+#     --http-check-port=443 \
+#     --period=60s \
+#     --timeout=10s
+#
+# Create log-based metric:
+#   gcloud logging metrics create mbg-backend-5xx-errors \
+#     --description="5xx errors from MBG backend" \
+#     --log-filter='resource.type="cloud_run_revision" AND resource.labels.service_name="mbg-backend" AND httpRequest.status>=500'

@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "DLG Governance",
+  "description": "Real-time validation rules, naming convention enforcement, and compliance checks for ad platform UIs",
+  "version": "1.0.0",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "alarms",
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://adsmanager.facebook.com/*",
+    "https://business.facebook.com/*",
+    "https://ads.google.com/*",
+    "https://api.mediabuyinggovernance.com/*",
+    "http://localhost:*/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content-scripts/*.js",
+        "styles/*.css",
+        "fonts/*"
+      ],
+      "matches": [
+        "https://adsmanager.facebook.com/*",
+        "https://business.facebook.com/*",
+        "https://ads.google.com/*",
+        "http://localhost:*/*"
+      ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://* http://localhost:*; img-src 'self' data:;"
+  }
+}

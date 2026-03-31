@@ -1,0 +1,73 @@
+/**
+ * Platform Theme CSS
+ *
+ * Base CSS injected into all ad platform pages.
+ * Provides CSS variables and utility classes used by governance components.
+ * This file is loaded via chrome.scripting.insertCSS() from the service worker.
+ *
+ * NOTE: Styles are scoped under .gov-* prefixed classes and [data-governance]
+ * attributes to avoid conflicts with the host page.
+ */
+
+/* ─── CSS Variables (Root Level) ───────────────────────────────────────────── */
+
+:root {
+  --gov-primary: #4F46E5;
+  --gov-primary-hover: #4338CA;
+
+  --gov-success: #16A34A;
+  --gov-success-bg: #DCFCE7;
+  --gov-success-border: #86EFAC;
+
+  --gov-warning: #CA8A04;
+  --gov-warning-bg: #FEF9C3;
+  --gov-warning-border: #FDE68A;
+
+  --gov-error: #DC2626;
+  --gov-error-bg: #FEE2E2;
+  --gov-error-border: #FCA5A5;
+
+  --gov-text: #1F2937;
+  --gov-text-secondary: #6B7280;
+  --gov-bg: #FFFFFF;
+  --gov-bg-secondary: #F9FAFB;
+  --gov-border: #E5E7EB;
+
+  --gov-z-index: 2147483000;
+  --gov-border-radius: 8px;
+  --gov-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --gov-transition: 150ms ease-in-out;
+}
+
+/* ─── Base Governance Container ────────────────────────────────────────────── */
+
+[data-governance="true"] {
+  all: initial;
+  display: block;
+  font-family: var(--gov-font-family);
+}
+
+/* ─── Body-Level Validation State Classes ──────────────────────────────────── */
+
+/* Applied by the injector to propagate validation state */
+/* Pattern: body.gov-valid-{field-slug} / body.gov-invalid-{field-slug} */
+/* Components can use these classes to conditionally style elements */
+
+/* ─── Accessibility ────────────────────────────────────────────────────────── */
+
+/* Ensure governance elements respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  [data-governance="true"],
+  [data-governance="true"] * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast support */
+@media (forced-colors: active) {
+  [data-governance="true"] {
+    forced-color-adjust: none;
+  }
+}

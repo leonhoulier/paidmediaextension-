@@ -1,0 +1,855 @@
+/**
+ * Google Ads Governance Theme
+ *
+ * Styles for all governance UI components injected into Google Ads.
+ * Designed to match Google Ads' Material Design language so governance
+ * elements feel native to the platform.
+ *
+ * Design tokens from Section 12.3 of the specification:
+ *  - Error BG:     #FCE8E6 (Material red-50)
+ *  - Error text:   #C5221F
+ *  - Error border: #F28B82
+ *  - Success BG:   #E6F4EA
+ *  - Success text:  #137333
+ *  - Success border: #81C995
+ *  - Border radius: 4px (Material standard)
+ *  - Font: Google Sans, Roboto, Arial
+ *  - Max z-index:  2147483000
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap');
+
+/* =========================================================================
+   CSS Custom Properties (Design Tokens)
+   ========================================================================= */
+
+:root {
+  /* Error / violation */
+  --gov-google-error-bg: #FCE8E6;
+  --gov-google-error-text: #C5221F;
+  --gov-google-error-border: #F28B82;
+
+  /* Warning */
+  --gov-google-warning-bg: #FEF7E0;
+  --gov-google-warning-text: #E37400;
+  --gov-google-warning-border: #FDD663;
+
+  /* Success / pass */
+  --gov-google-success-bg: #E6F4EA;
+  --gov-google-success-text: #137333;
+  --gov-google-success-border: #81C995;
+
+  /* Info */
+  --gov-google-info-bg: #E8F0FE;
+  --gov-google-info-text: #1967D2;
+  --gov-google-info-border: #AECBFA;
+
+  /* Neutral */
+  --gov-google-neutral-bg: #F1F3F4;
+  --gov-google-neutral-text: #5F6368;
+  --gov-google-neutral-border: #DADCE0;
+
+  /* Surface & layout */
+  --gov-google-surface: #FFFFFF;
+  --gov-google-on-surface: #202124;
+  --gov-google-on-surface-secondary: #5F6368;
+  --gov-google-divider: #DADCE0;
+
+  /* Shadows (Material elevation) */
+  --gov-google-shadow-1: 0 1px 2px 0 rgba(60, 64, 67, 0.3),
+    0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --gov-google-shadow-2: 0 1px 3px 0 rgba(60, 64, 67, 0.3),
+    0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  --gov-google-shadow-3: 0 4px 8px 3px rgba(60, 64, 67, 0.15),
+    0 1px 3px 0 rgba(60, 64, 67, 0.3);
+
+  /* Typography */
+  --gov-google-font-family: 'Google Sans', 'Roboto', Arial, sans-serif;
+  --gov-google-font-size-sm: 12px;
+  --gov-google-font-size-base: 14px;
+  --gov-google-font-size-md: 16px;
+  --gov-google-font-size-lg: 20px;
+  --gov-google-font-size-xl: 24px;
+
+  /* Spacing */
+  --gov-google-spacing-xs: 4px;
+  --gov-google-spacing-sm: 8px;
+  --gov-google-spacing-md: 12px;
+  --gov-google-spacing-lg: 16px;
+  --gov-google-spacing-xl: 24px;
+
+  /* Borders */
+  --gov-google-border-radius: 4px;
+  --gov-google-border-radius-lg: 8px;
+
+  /* Z-index */
+  --gov-google-z-overlay: 2147483000;
+  --gov-google-z-sidebar: 2147482999;
+  --gov-google-z-banner: 2147482998;
+}
+
+/* =========================================================================
+   Base Reset for Governance Components
+   ========================================================================= */
+
+.governance-google *,
+.governance-google *::before,
+.governance-google *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.governance-google {
+  font-family: var(--gov-google-font-family);
+  font-size: var(--gov-google-font-size-base);
+  line-height: 1.5;
+  color: var(--gov-google-on-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================================================================
+   Validation Banners
+   ========================================================================= */
+
+.governance-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gov-google-spacing-sm);
+  padding: var(--gov-google-spacing-md) var(--gov-google-spacing-lg);
+  margin-top: var(--gov-google-spacing-sm);
+  border-radius: var(--gov-google-border-radius);
+  font-family: var(--gov-google-font-family);
+  font-size: var(--gov-google-font-size-base);
+  line-height: 1.5;
+}
+
+.governance-banner-error {
+  background: var(--gov-google-error-bg);
+  color: var(--gov-google-error-text);
+  border: 1px solid var(--gov-google-error-border);
+}
+
+.governance-banner-warning {
+  background: var(--gov-google-warning-bg);
+  color: var(--gov-google-warning-text);
+  border: 1px solid var(--gov-google-warning-border);
+}
+
+.governance-banner-success {
+  background: var(--gov-google-success-bg);
+  color: var(--gov-google-success-text);
+  border: 1px solid var(--gov-google-success-border);
+}
+
+.governance-banner-info {
+  background: var(--gov-google-info-bg);
+  color: var(--gov-google-info-text);
+  border: 1px solid var(--gov-google-info-border);
+}
+
+.governance-banner-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.governance-banner-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.governance-banner-title {
+  font-weight: 500;
+  margin-bottom: var(--gov-google-spacing-xs);
+}
+
+.governance-banner-message {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.governance-banner-dismiss {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.governance-banner-dismiss:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+/* =========================================================================
+   Guidelines Sidebar
+   ========================================================================= */
+
+.governance-sidebar {
+  position: fixed;
+  right: 20px;
+  top: 100px;
+  width: 320px;
+  max-height: calc(100vh - 140px);
+  background: var(--gov-google-surface);
+  box-shadow: var(--gov-google-shadow-2);
+  border-radius: var(--gov-google-border-radius);
+  z-index: var(--gov-google-z-sidebar);
+  font-family: var(--gov-google-font-family);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.governance-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--gov-google-spacing-lg);
+  border-bottom: 1px solid var(--gov-google-divider);
+  flex-shrink: 0;
+}
+
+.governance-sidebar-title {
+  font-size: var(--gov-google-font-size-md);
+  font-weight: 500;
+  color: var(--gov-google-on-surface);
+}
+
+.governance-sidebar-count {
+  font-size: var(--gov-google-font-size-sm);
+  color: var(--gov-google-on-surface-secondary);
+  background: var(--gov-google-neutral-bg);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: var(--gov-google-spacing-sm);
+}
+
+.governance-sidebar-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gov-google-on-surface-secondary);
+  transition: background-color 0.15s ease;
+}
+
+.governance-sidebar-close:hover {
+  background-color: var(--gov-google-neutral-bg);
+}
+
+.governance-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--gov-google-spacing-sm) 0;
+}
+
+/* Category groups */
+.governance-category {
+  border-bottom: 1px solid var(--gov-google-divider);
+}
+
+.governance-category:last-child {
+  border-bottom: none;
+}
+
+.governance-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--gov-google-spacing-md) var(--gov-google-spacing-lg);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.governance-category-header:hover {
+  background-color: var(--gov-google-neutral-bg);
+}
+
+.governance-category-name {
+  font-size: var(--gov-google-font-size-sm);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gov-google-on-surface-secondary);
+}
+
+.governance-category-badge {
+  font-size: var(--gov-google-font-size-sm);
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.governance-category-badge-pass {
+  background: var(--gov-google-success-bg);
+  color: var(--gov-google-success-text);
+}
+
+.governance-category-badge-fail {
+  background: var(--gov-google-error-bg);
+  color: var(--gov-google-error-text);
+}
+
+.governance-category-badge-warn {
+  background: var(--gov-google-warning-bg);
+  color: var(--gov-google-warning-text);
+}
+
+/* Guideline items */
+.governance-guideline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.governance-guideline-item {
+  display: flex;
+  align-items: center;
+  gap: var(--gov-google-spacing-sm);
+  padding: var(--gov-google-spacing-sm) var(--gov-google-spacing-lg);
+  padding-left: calc(var(--gov-google-spacing-lg) + var(--gov-google-spacing-lg));
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  font-size: var(--gov-google-font-size-base);
+}
+
+.governance-guideline-item:hover {
+  background-color: var(--gov-google-neutral-bg);
+}
+
+.governance-guideline-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.governance-guideline-icon-pass {
+  color: var(--gov-google-success-text);
+}
+
+.governance-guideline-icon-fail {
+  color: var(--gov-google-error-text);
+}
+
+.governance-guideline-icon-warn {
+  color: var(--gov-google-warning-text);
+}
+
+.governance-guideline-icon-pending {
+  color: var(--gov-google-neutral-text);
+}
+
+.governance-guideline-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gov-google-on-surface);
+}
+
+/* =========================================================================
+   Campaign Score Indicator
+   ========================================================================= */
+
+.governance-score {
+  display: flex;
+  align-items: center;
+  gap: var(--gov-google-spacing-md);
+  padding: var(--gov-google-spacing-lg);
+  font-family: var(--gov-google-font-family);
+}
+
+.governance-score-circle {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+.governance-score-circle svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.governance-score-circle-bg {
+  fill: none;
+  stroke: var(--gov-google-neutral-bg);
+  stroke-width: 4;
+}
+
+.governance-score-circle-fill {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s ease;
+}
+
+.governance-score-circle-fill-high {
+  stroke: var(--gov-google-success-text);
+}
+
+.governance-score-circle-fill-medium {
+  stroke: var(--gov-google-warning-text);
+}
+
+.governance-score-circle-fill-low {
+  stroke: var(--gov-google-error-text);
+}
+
+.governance-score-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: var(--gov-google-font-size-lg);
+  font-weight: 700;
+  color: var(--gov-google-on-surface);
+}
+
+.governance-score-label {
+  font-size: var(--gov-google-font-size-sm);
+  color: var(--gov-google-on-surface-secondary);
+  font-weight: 500;
+}
+
+.governance-score-message {
+  font-size: var(--gov-google-font-size-base);
+  color: var(--gov-google-on-surface);
+  margin-top: var(--gov-google-spacing-xs);
+}
+
+/* =========================================================================
+   Creation Blocker Overlay
+   ========================================================================= */
+
+.governance-blocker-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  z-index: var(--gov-google-z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: governance-fade-in 0.2s ease;
+}
+
+.governance-blocker-modal {
+  background: var(--gov-google-surface);
+  border-radius: var(--gov-google-border-radius-lg);
+  box-shadow: var(--gov-google-shadow-3);
+  width: 480px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  animation: governance-scale-in 0.2s ease;
+}
+
+.governance-blocker-header {
+  display: flex;
+  align-items: center;
+  gap: var(--gov-google-spacing-md);
+  padding: var(--gov-google-spacing-xl);
+  padding-bottom: var(--gov-google-spacing-lg);
+}
+
+.governance-blocker-header-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--gov-google-error-bg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gov-google-error-text);
+  flex-shrink: 0;
+}
+
+.governance-blocker-title {
+  font-size: var(--gov-google-font-size-lg);
+  font-weight: 500;
+  color: var(--gov-google-on-surface);
+}
+
+.governance-blocker-body {
+  padding: 0 var(--gov-google-spacing-xl);
+  padding-bottom: var(--gov-google-spacing-lg);
+}
+
+.governance-blocker-message {
+  font-size: var(--gov-google-font-size-base);
+  color: var(--gov-google-on-surface-secondary);
+  margin-bottom: var(--gov-google-spacing-lg);
+  line-height: 1.6;
+}
+
+.governance-blocker-violations {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.governance-blocker-violation {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gov-google-spacing-sm);
+  padding: var(--gov-google-spacing-sm) 0;
+  font-size: var(--gov-google-font-size-base);
+  color: var(--gov-google-error-text);
+  border-bottom: 1px solid var(--gov-google-divider);
+}
+
+.governance-blocker-violation:last-child {
+  border-bottom: none;
+}
+
+.governance-blocker-violation-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.governance-blocker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gov-google-spacing-sm);
+  padding: var(--gov-google-spacing-lg) var(--gov-google-spacing-xl);
+  border-top: 1px solid var(--gov-google-divider);
+}
+
+.governance-blocker-btn {
+  font-family: var(--gov-google-font-family);
+  font-size: var(--gov-google-font-size-base);
+  font-weight: 500;
+  padding: var(--gov-google-spacing-sm) var(--gov-google-spacing-lg);
+  border-radius: var(--gov-google-border-radius);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.governance-blocker-btn-primary {
+  background: var(--gov-google-info-text);
+  color: white;
+}
+
+.governance-blocker-btn-primary:hover {
+  background: #185ABC;
+  box-shadow: var(--gov-google-shadow-1);
+}
+
+.governance-blocker-btn-secondary {
+  background: transparent;
+  color: var(--gov-google-info-text);
+}
+
+.governance-blocker-btn-secondary:hover {
+  background: var(--gov-google-info-bg);
+}
+
+/* =========================================================================
+   Comment Modal
+   ========================================================================= */
+
+.governance-comment-modal {
+  background: var(--gov-google-surface);
+  border-radius: var(--gov-google-border-radius-lg);
+  box-shadow: var(--gov-google-shadow-3);
+  width: 440px;
+  max-width: calc(100vw - 48px);
+}
+
+.governance-comment-header {
+  padding: var(--gov-google-spacing-xl);
+  padding-bottom: var(--gov-google-spacing-md);
+}
+
+.governance-comment-title {
+  font-size: var(--gov-google-font-size-md);
+  font-weight: 500;
+  color: var(--gov-google-on-surface);
+}
+
+.governance-comment-body {
+  padding: 0 var(--gov-google-spacing-xl);
+  padding-bottom: var(--gov-google-spacing-lg);
+}
+
+.governance-comment-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: var(--gov-google-spacing-md);
+  border: 1px solid var(--gov-google-neutral-border);
+  border-radius: var(--gov-google-border-radius);
+  font-family: var(--gov-google-font-family);
+  font-size: var(--gov-google-font-size-base);
+  color: var(--gov-google-on-surface);
+  resize: vertical;
+  transition: border-color 0.15s ease;
+}
+
+.governance-comment-textarea:focus {
+  outline: none;
+  border-color: var(--gov-google-info-text);
+  box-shadow: 0 0 0 1px var(--gov-google-info-text);
+}
+
+.governance-comment-textarea::placeholder {
+  color: var(--gov-google-on-surface-secondary);
+}
+
+.governance-comment-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gov-google-spacing-sm);
+  padding: var(--gov-google-spacing-lg) var(--gov-google-spacing-xl);
+  border-top: 1px solid var(--gov-google-divider);
+}
+
+/* =========================================================================
+   Naming Convention Preview
+   ========================================================================= */
+
+.governance-naming-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gov-google-spacing-xs);
+  padding: var(--gov-google-spacing-md);
+  margin-top: var(--gov-google-spacing-sm);
+  background: var(--gov-google-neutral-bg);
+  border-radius: var(--gov-google-border-radius);
+  font-family: var(--gov-google-font-family);
+  font-size: var(--gov-google-font-size-sm);
+}
+
+.governance-naming-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gov-google-spacing-xs);
+  padding: 2px 8px;
+  border-radius: var(--gov-google-border-radius);
+  font-weight: 500;
+}
+
+.governance-naming-segment-valid {
+  background: var(--gov-google-success-bg);
+  color: var(--gov-google-success-text);
+  border: 1px solid var(--gov-google-success-border);
+}
+
+.governance-naming-segment-invalid {
+  background: var(--gov-google-error-bg);
+  color: var(--gov-google-error-text);
+  border: 1px solid var(--gov-google-error-border);
+}
+
+.governance-naming-segment-pending {
+  background: var(--gov-google-neutral-bg);
+  color: var(--gov-google-neutral-text);
+  border: 1px solid var(--gov-google-neutral-border);
+}
+
+.governance-naming-separator {
+  color: var(--gov-google-on-surface-secondary);
+  font-weight: 400;
+}
+
+/* =========================================================================
+   Budget Confirmation Field
+   ========================================================================= */
+
+.governance-budget-confirm {
+  margin-top: var(--gov-google-spacing-sm);
+  padding: var(--gov-google-spacing-md) var(--gov-google-spacing-lg);
+  background: var(--gov-google-warning-bg);
+  border: 1px solid var(--gov-google-warning-border);
+  border-radius: var(--gov-google-border-radius);
+}
+
+.governance-budget-confirm-label {
+  font-size: var(--gov-google-font-size-sm);
+  font-weight: 500;
+  color: var(--gov-google-warning-text);
+  margin-bottom: var(--gov-google-spacing-sm);
+}
+
+.governance-budget-confirm-input {
+  width: 100%;
+  padding: var(--gov-google-spacing-sm) var(--gov-google-spacing-md);
+  border: 1px solid var(--gov-google-warning-border);
+  border-radius: var(--gov-google-border-radius);
+  font-family: var(--gov-google-font-family);
+  font-size: var(--gov-google-font-size-base);
+  color: var(--gov-google-on-surface);
+  background: var(--gov-google-surface);
+}
+
+.governance-budget-confirm-input:focus {
+  outline: none;
+  border-color: var(--gov-google-warning-text);
+}
+
+.governance-budget-confirm-match {
+  border-color: var(--gov-google-success-border);
+}
+
+.governance-budget-confirm-mismatch {
+  border-color: var(--gov-google-error-border);
+}
+
+/* =========================================================================
+   Button Overlay (Blocking)
+   ========================================================================= */
+
+.governance-button-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: var(--gov-google-border-radius);
+  cursor: not-allowed;
+  z-index: var(--gov-google-z-banner);
+}
+
+.governance-button-overlay-text {
+  font-family: var(--gov-google-font-family);
+  font-size: var(--gov-google-font-size-sm);
+  font-weight: 500;
+  color: var(--gov-google-error-text);
+  text-align: center;
+  padding: var(--gov-google-spacing-xs) var(--gov-google-spacing-sm);
+}
+
+/* =========================================================================
+   Tooltip
+   ========================================================================= */
+
+.governance-tooltip {
+  position: absolute;
+  background: #202124;
+  color: white;
+  font-family: var(--gov-google-font-family);
+  font-size: var(--gov-google-font-size-sm);
+  padding: var(--gov-google-spacing-sm) var(--gov-google-spacing-md);
+  border-radius: var(--gov-google-border-radius);
+  white-space: nowrap;
+  z-index: var(--gov-google-z-overlay);
+  pointer-events: none;
+  box-shadow: var(--gov-google-shadow-1);
+}
+
+.governance-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 8px;
+  background: #202124;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+/* =========================================================================
+   Animations
+   ========================================================================= */
+
+@keyframes governance-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes governance-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes governance-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* =========================================================================
+   Body-level CSS State Classes (Section 11.5)
+   ========================================================================= */
+
+body.gov-google-active .governance-sidebar {
+  animation: governance-slide-in-right 0.3s ease;
+}
+
+/* Per-field validation state classes */
+body[class*='gov-valid-'] .governance-banner-success,
+body[class*='gov-invalid-'] .governance-banner-error {
+  animation: governance-fade-in 0.2s ease;
+}
+
+/* =========================================================================
+   Responsive Adjustments
+   ========================================================================= */
+
+@media (max-width: 1280px) {
+  .governance-sidebar {
+    width: 280px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .governance-sidebar {
+    width: 260px;
+    right: 10px;
+    top: 80px;
+  }
+}
+
+/* =========================================================================
+   Reduced Motion Preference
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .governance-banner,
+  .governance-sidebar,
+  .governance-blocker-backdrop,
+  .governance-blocker-modal,
+  .governance-score-circle-fill {
+    animation: none !important;
+    transition: none !important;
+  }
+}

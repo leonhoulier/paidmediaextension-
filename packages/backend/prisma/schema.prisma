@@ -1,0 +1,338 @@
+// Prisma Schema for Media Buying Governance Platform
+// See SPEC.md Section 9 for full data model documentation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum SubscriptionPlan {
+  free
+  pro
+  enterprise
+}
+
+enum UserRole {
+  super_admin
+  admin
+  viewer
+  buyer
+}
+
+enum Platform {
+  meta
+  google_ads
+  all
+}
+
+enum EntityLevel {
+  campaign
+  ad_set
+  ad
+}
+
+enum EnforcementMode {
+  warning
+  blocking
+  comment_required
+  second_approver
+}
+
+enum ComplianceStatus {
+  passed
+  violated
+  overridden
+  pending
+}
+
+enum ApprovalStatus {
+  pending    @map("approval_pending")
+  approved
+  rejected
+}
+
+// ─── Tables ─────────────────────────────────────────────────────────────────
+
+/// Organization entity — the top-level tenant
+model Organization {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String           @db.VarChar(255)
+  slug      String           @unique @db.VarChar(100)
+  plan      SubscriptionPlan @default(free)
+  settings  Json             @default("{}") @db.JsonB
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  users            User[]
+  adAccounts       AdAccount[]
+  teams            Team[]
+  ruleSets         RuleSet[]
+  complianceEvents ComplianceEvent[]
+  approvalRequests ApprovalRequest[]
+
+  @@map("organizations")
+}
+
+/// User entity — admin, viewer, or buyer within an organization
+model User {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  email            String    @unique @db.VarChar(255)
+  name             String    @db.VarChar(255)
+  role             UserRole  @default(buyer)
+  teamIds          String[]  @default([]) @map("team_ids") @db.Uuid
+  extensionToken   String?   @unique @map("extension_token") @db.VarChar(64)
+  tokenExpiresAt   DateTime? @map("token_expires_at")
+  tokenRevokedAt   DateTime? @map("token_revoked_at")
+  lastActiveAt     DateTime? @map("last_active_at")
+
+  // Relations
+  organization         Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  complianceEvents     ComplianceEvent[] @relation("buyer_compliance_events")
+  approvalRequestsMade ApprovalRequest[] @relation("buyer_approval_requests")
+  approvalRequestsReceived ApprovalRequest[] @relation("approver_approval_requests")
+
+  @@index([organizationId])
+  @@index([extensionToken])
+  @@index([email])
+  @@map("users")
+}
+
+/// Team entity — grouping of buyers within an organization
+model Team {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  name           String  @db.VarChar(255)
+  description    String? @db.Text
+  memberIds      String[] @default([]) @map("member_ids") @db.Uuid
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("teams")
+}
+
+/// Ad Account entity — a registered ad platform account
+model AdAccount {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  platform          Platform
+  platformAccountId String   @map("platform_account_id") @db.VarChar(100)
+  accountName       String   @map("account_name") @db.VarChar(255)
+  market            String?  @db.VarChar(50)
+  region            String?  @db.VarChar(50)
+  active            Boolean  @default(true)
+
+  // Relations
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  complianceEvents ComplianceEvent[]
+
+  @@unique([organizationId, platform, platformAccountId])
+  @@index([organizationId])
+  @@index([platform])
+  @@map("ad_accounts")
+}
+
+/// Rule Set entity — a collection of rules scoped to accounts/teams/buyers
+model RuleSet {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  name           String  @db.VarChar(255)
+  description    String? @db.Text
+  accountIds     String[] @default([]) @map("account_ids") @db.Uuid
+  teamIds        String[] @default([]) @map("team_ids") @db.Uuid
+  buyerIds       String[] @default([]) @map("buyer_ids") @db.Uuid
+  active         Boolean  @default(true)
+  version        Int      @default(1)
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rules        Rule[]
+
+  @@index([organizationId])
+  @@map("rule_sets")
+}
+
+/// Rule entity — a single validation rule within a rule set
+model Rule {
+  id            String          @id @default(uuid()) @db.Uuid
+  ruleSetId     String          @map("rule_set_id") @db.Uuid
+  name          String          @db.VarChar(255)
+  description   String?         @db.Text
+  platform      Platform        @default(all)
+  entityLevel   EntityLevel     @map("entity_level")
+  ruleType      String          @map("rule_type") @db.VarChar(50)
+  enforcement   EnforcementMode @default(warning)
+  condition     Json            @db.JsonB
+  uiConfig      Json            @default("{}") @map("ui_config") @db.JsonB
+  priority      Int             @default(0)
+  enabled       Boolean         @default(true)
+  version       Int             @default(1)
+
+  // Relations
+  ruleSet          RuleSet           @relation(fields: [ruleSetId], references: [id], onDelete: Cascade)
+  namingTemplate   NamingTemplate?
+  complianceEvents ComplianceEvent[]
+  approvalRequests ApprovalRequest[]
+
+  @@index([ruleSetId])
+  @@index([platform])
+  @@index([entityLevel])
+  @@index([ruleType])
+  @@map("rules")
+}
+
+/// Naming Template entity — defines the structure of a naming convention
+model NamingTemplate {
+  id        String @id @default(uuid()) @db.Uuid
+  ruleId    String @unique @map("rule_id") @db.Uuid
+  segments  Json   @db.JsonB
+  separator String @default("_") @db.VarChar(5)
+  example   String @default("") @db.VarChar(500)
+
+  // Relations
+  rule Rule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@map("naming_templates")
+}
+
+/// Compliance Event entity — a record of a rule check result
+model ComplianceEvent {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  buyerId        String           @map("buyer_id") @db.Uuid
+  adAccountId    String           @map("ad_account_id") @db.Uuid
+  platform       Platform
+  entityLevel    EntityLevel      @map("entity_level")
+  entityName     String           @map("entity_name") @db.VarChar(500)
+  ruleId         String           @map("rule_id") @db.Uuid
+  status         ComplianceStatus
+  fieldValue     String?          @map("field_value") @db.Text
+  expectedValue  String?          @map("expected_value") @db.Text
+  comment        String?          @db.Text
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  buyer        User         @relation("buyer_compliance_events", fields: [buyerId], references: [id], onDelete: Cascade)
+  adAccount    AdAccount    @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  rule         Rule         @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([buyerId])
+  @@index([adAccountId])
+  @@index([ruleId])
+  @@index([createdAt])
+  @@index([status])
+  @@map("compliance_events")
+}
+
+/// Approval Request entity — second-approver workflow
+model ApprovalRequest {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  buyerId        String         @map("buyer_id") @db.Uuid
+  approverId     String         @map("approver_id") @db.Uuid
+  ruleId         String         @map("rule_id") @db.Uuid
+  entitySnapshot Json           @map("entity_snapshot") @db.JsonB
+  status         ApprovalStatus @default(pending)
+  comment        String?        @db.Text
+  requestedAt    DateTime       @default(now()) @map("requested_at")
+  resolvedAt     DateTime?      @map("resolved_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  buyer        User         @relation("buyer_approval_requests", fields: [buyerId], references: [id], onDelete: Cascade)
+  approver     User         @relation("approver_approval_requests", fields: [approverId], references: [id], onDelete: Cascade)
+  rule         Rule         @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([buyerId])
+  @@index([approverId])
+  @@index([status])
+  @@map("approval_requests")
+}
+
+// ─── Phase 2 Tables ─────────────────────────────────────────────────────────
+
+/// Webhook registration for external integrations
+model Webhook {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  url            String   @db.VarChar(2048)
+  events         String[] @default([])
+  secret         String   @db.VarChar(255)
+  active         Boolean  @default(true)
+  description    String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  deliveries WebhookDelivery[]
+
+  @@index([organizationId])
+  @@index([active])
+  @@map("webhooks")
+}
+
+/// Version history for rules — each edit creates a new version row
+model RuleVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  ruleId        String   @map("rule_id") @db.Uuid
+  version       Int
+  snapshot      Json     @db.JsonB
+  changedFields String[] @default([]) @map("changed_fields")
+  changedBy     String?  @map("changed_by") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([ruleId])
+  @@index([ruleId, version])
+  @@map("rule_versions")
+}
+
+/// Webhook delivery log — tracks all webhook delivery attempts
+model WebhookDelivery {
+  id           String   @id @default(uuid()) @db.Uuid
+  webhookId    String   @map("webhook_id") @db.Uuid
+  event        String   @db.VarChar(50)
+  url          String   @db.VarChar(2048)
+  statusCode   Int?     @map("status_code")
+  success      Boolean
+  requestBody  String   @map("request_body") @db.Text
+  responseBody String?  @map("response_body") @db.Text
+  error        String?  @db.Text
+  attemptedAt  DateTime @default(now()) @map("attempted_at")
+  duration     Int      // milliseconds
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([attemptedAt])
+  @@index([success])
+  @@map("webhook_deliveries")
+}
+
+// ─── Phase 3: Bridge Hardening Tables ────────────────────────────────────────
+
+/// Pub/Sub publish failure log — tracks failed publish attempts for retry
+model PubSubFailure {
+  id          String    @id @default(uuid()) @db.Uuid
+  topic       String    @db.VarChar(255)
+  message     String    @db.Text
+  attempts    Int       @default(1)
+  lastError   String    @map("last_error") @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastAttempt DateTime  @default(now()) @map("last_attempt")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  @@index([resolvedAt])
+  @@index([lastAttempt])
+  @@map("pubsub_failures")
+}

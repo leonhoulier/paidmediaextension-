@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campaigns | Ads Manager</title>
+  <style>
+    /*
+     * Minimal reproduction of Meta Ads Manager campaign creation form.
+     * Uses realistic class names, aria attributes, data-testid patterns,
+     * and React-like nested div structures matching what the extension
+     * selectors target.
+     */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      background: #f0f2f5;
+      color: #1c1e21;
+      font-size: 14px;
+    }
+
+    /* ── Top Nav ─────────────────────────────────── */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #dddfe2;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+    }
+    .topbar__brand { font-weight: 700; font-size: 18px; color: #1877f2; }
+    .topbar__account { font-size: 13px; color: #65676b; margin-left: auto; }
+
+    /* ── Layout ──────────────────────────────────── */
+    .ams-layout {
+      display: flex;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      gap: 24px;
+    }
+    .ams-main { flex: 1; }
+    .ams-sidebar { width: 320px; flex-shrink: 0; }
+
+    /* ── Cards ────────────────────────────────────── */
+    .ams-card {
+      background: #fff;
+      border: 1px solid #dddfe2;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .ams-card__title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .ams-field {
+      margin-bottom: 16px;
+    }
+    .ams-field__label {
+      display: block;
+      font-size: 13px;
+      color: #65676b;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .ams-field__input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #dddfe2;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 150ms;
+    }
+    .ams-field__input:focus { border-color: #1877f2; }
+
+    /* ── Objective Cards ─────────────────────────── */
+    .objective-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+    .objective-card {
+      flex: 1 1 calc(33% - 12px);
+      min-width: 140px;
+      border: 2px solid #dddfe2;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 150ms, background 150ms;
+    }
+    .objective-card[aria-checked="true"],
+    .objective-card.selected {
+      border-color: #1877f2;
+      background: #e7f3ff;
+    }
+    .objective-card__icon { font-size: 24px; margin-bottom: 8px; }
+    .objective-card__name { font-size: 14px; font-weight: 600; }
+
+    /* ── Budget Section ──────────────────────────── */
+    .budget-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .budget-type-dropdown {
+      padding: 10px 12px;
+      border: 1px solid #dddfe2;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .budget-type-dropdown__selected { font-size: 14px; }
+    .budget-type-dropdown__arrow { color: #65676b; }
+
+    /* ── Toggle / Switch ─────────────────────────── */
+    .ams-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+    }
+    .ams-toggle-label { font-size: 14px; font-weight: 500; }
+    .ams-toggle-sublabel { font-size: 12px; color: #65676b; }
+    .ams-switch {
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      background: #65676b;
+      position: relative;
+      cursor: pointer;
+      transition: background 200ms;
+    }
+    .ams-switch[aria-checked="true"] { background: #1877f2; }
+    .ams-switch__thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 200ms;
+    }
+    .ams-switch[aria-checked="true"] .ams-switch__thumb {
+      transform: translateX(20px);
+    }
+
+    /* ── Publish bar ─────────────────────────────── */
+    .publish-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top: 1px solid #dddfe2;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      z-index: 100;
+    }
+    .publish-bar__btn {
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+    }
+    .publish-bar__btn--secondary {
+      background: #e4e6eb;
+      color: #1c1e21;
+    }
+    .publish-bar__btn--primary {
+      background: #1877f2;
+      color: #fff;
+    }
+
+    /* ── Status banner ───────────────────────────── */
+    .fixture-info {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #664d03;
+    }
+    .fixture-info strong { display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <!-- ═══════════════════════════════════════════════════════
+       TOP NAVIGATION BAR
+       ═══════════════════════════════════════════════════════ -->
+  <div class="topbar">
+    <span class="topbar__brand">Ads Manager</span>
+    <span class="topbar__account">Account: act_1639086456168798</span>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       MAIN LAYOUT
+       ═══════════════════════════════════════════════════════ -->
+  <div class="ams-layout">
+    <div class="ams-main">
+
+      <!-- Fixture identification banner -->
+      <div class="fixture-info">
+        <strong>Test Fixture: Meta Ads Manager - Campaign Creation</strong>
+        URL params should include: ?act=1639086456168798&amp;tool=CAMPAIGN_CREATION_FLOW<br/>
+        This page mimics the DOM structure that the extension's Meta adapter selectors target.
+      </div>
+
+      <!-- ─── Campaign Name ────────────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Campaign name</div>
+        <div class="ams-field">
+          <!--
+            META SELECTOR TARGET: campaign.name
+            Primary:   input[aria-label*="Campaign name"]
+            Fallback:  [data-testid*="campaign-name"] input
+            Heuristic: input near "Campaign name" label
+          -->
+          <div data-testid="campaign-name-input" class="_3-90">
+            <div class="_3-91">
+              <input
+                type="text"
+                aria-label="Campaign name"
+                value="DLG_US_Awareness_Q1_20260207"
+                class="ams-field__input _1reg"
+                data-testid="campaign-name-field"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Campaign Objective ───────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Choose a campaign objective</div>
+        <!--
+          META SELECTOR TARGET: campaign.objective
+          Primary:   [data-testid*="objective"]
+          Fallback:  [role="radiogroup"]
+          Text:      span containing "Objective"
+        -->
+        <div data-testid="campaign-objective-selector" role="radiogroup" class="objective-grid _5ptz">
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F4E2;</div>
+            <div class="objective-card__name">Awareness</div>
+          </div>
+          <div role="radio" aria-checked="true" aria-selected="true" class="objective-card selected _5pu1" tabindex="0" data-selected="true">
+            <div class="objective-card__icon">&#x1F6A6;</div>
+            <div class="objective-card__name">Traffic</div>
+          </div>
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F4AC;</div>
+            <div class="objective-card__name">Engagement</div>
+          </div>
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F465;</div>
+            <div class="objective-card__name">Leads</div>
+          </div>
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F4F1;</div>
+            <div class="objective-card__name">App promotion</div>
+          </div>
+          <div role="radio" aria-checked="false" aria-selected="false" class="objective-card _5pu1" tabindex="0">
+            <div class="objective-card__icon">&#x1F6D2;</div>
+            <div class="objective-card__name">Sales</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Advantage+ Campaign Budget (CBO) ─────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Campaign budget optimization</div>
+        <!--
+          META SELECTOR TARGET: campaign.cbo_enabled
+          Primary:   [aria-label*="Advantage+ campaign budget"]
+          Fallback:  [role="switch"][aria-label*="budget"]
+          data-testid: [data-testid*="cbo"]
+          Heuristic: toggle near "Advantage+" text
+        -->
+        <div class="ams-toggle-row _42ft">
+          <div>
+            <div class="ams-toggle-label">Advantage+ campaign budget</div>
+            <div class="ams-toggle-sublabel">Automatically distribute your budget across ad sets to get more results</div>
+          </div>
+          <div
+            role="switch"
+            aria-checked="true"
+            aria-label="Advantage+ campaign budget"
+            data-testid="cbo-toggle"
+            class="ams-switch"
+            tabindex="0"
+          >
+            <div class="ams-switch__thumb"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Budget Section ───────────────────────── -->
+      <div class="ams-card">
+        <div class="ams-card__title">Budget &amp; schedule</div>
+        <!--
+          META SELECTOR TARGET: campaign.budget_type
+          Primary:   [aria-label*="Budget type"]
+          data-testid: [data-testid*="budget-type"]
+          Text:      span containing "Daily budget" or "Lifetime budget"
+          Heuristic: dropdown near "Budget" label
+        -->
+        <div class="budget-section _42fu" data-testid="budget-section">
+          <div class="ams-field">
+            <label class="ams-field__label">Budget type</label>
+            <div
+              aria-label="Budget type"
+              data-testid="budget-type-selector"
+              class="budget-type-dropdown _1amu"
+              role="combobox"
+              aria-expanded="false"
+            >
+              <span class="budget-type-dropdown__selected" aria-selected="true">Lifetime budget</span>
+              <span class="budget-type-dropdown__arrow">&#x25BC;</span>
+            </div>
+          </div>
+
+          <!--
+            META SELECTOR TARGET: campaign.budget_value
+            Primary:   input[aria-label*="Budget"][type="text"]
+            data-testid: [data-testid*="budget-value"] input
+            Heuristic: numeric input near "Budget" label
+          -->
+          <div class="ams-field" data-testid="budget-value-wrapper">
+            <label class="ams-field__label">Budget amount</label>
+            <div class="_3-90">
+              <input
+                type="text"
+                aria-label="Budget"
+                value="$5,000.00"
+                class="ams-field__input _1reg"
+                data-testid="budget-value-input"
+                inputmode="decimal"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.ams-main -->
+
+    <!-- ═══════════════════════════════════════════
+         RIGHT SIDEBAR (where the guidelines sidebar will inject)
+         ═══════════════════════════════════════════ -->
+    <div class="ams-sidebar">
+      <div class="ams-card">
+        <div class="ams-card__title">Campaign details</div>
+        <p style="font-size: 13px; color: #65676b;">
+          Your campaign is using the <strong>Traffic</strong> objective with
+          <strong>Advantage+ campaign budget</strong> enabled.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PUBLISH BAR (bottom fixed bar)
+       ═══════════════════════════════════════════════════════ -->
+  <div class="publish-bar">
+    <button class="publish-bar__btn publish-bar__btn--secondary">Discard draft</button>
+    <!--
+      META SELECTOR TARGET: publish_button / creation_intercept
+      Primary:   button[type="submit"]
+      data-testid: [data-testid*="publish"] button
+      Text:      button containing "Publish" or "Next"
+    -->
+    <button type="submit" class="publish-bar__btn publish-bar__btn--primary" data-testid="publish-button">
+      Publish
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       REACT FIBER SIMULATION
+       Attach __reactFiber$ keys to DOM elements so the extension's
+       React Fiber traversal code has something to read.
+       ═══════════════════════════════════════════════════════ -->
+  <script>
+    (function simulateReactFiber() {
+      const fiberKey = '__reactFiber$mock' + Math.random().toString(36).slice(2, 8);
+
+      // Campaign name input
+      const nameInput = document.querySelector('input[aria-label="Campaign name"]');
+      if (nameInput) {
+        nameInput[fiberKey] = {
+          memoizedProps: {
+            value: nameInput.value,
+            onChange: function() {},
+          },
+          return: {
+            type: { displayName: 'CampaignNameInput', name: 'CampaignNameInput' },
+            memoizedProps: { value: nameInput.value },
+            return: null,
+          },
+          type: { displayName: 'input', name: 'input' },
+        };
+      }
+
+      // Budget input
+      const budgetInput = document.querySelector('input[aria-label="Budget"]');
+      if (budgetInput) {
+        budgetInput[fiberKey] = {
+          memoizedProps: {
+            value: budgetInput.value,
+          },
+          return: {
+            type: { displayName: 'BudgetInput', name: 'BudgetInput' },
+            memoizedProps: { value: 5000 },
+            return: null,
+          },
+          type: { displayName: 'input', name: 'input' },
+        };
+      }
+
+      // CBO toggle
+      const cboToggle = document.querySelector('[role="switch"][aria-label*="Advantage"]');
+      if (cboToggle) {
+        cboToggle[fiberKey] = {
+          memoizedProps: {
+            checked: true,
+            value: true,
+          },
+          return: {
+            type: { displayName: 'CBOToggle', name: 'CBOToggle' },
+            memoizedProps: { checked: true },
+            return: null,
+          },
+          type: { displayName: 'div', name: 'div' },
+        };
+      }
+
+      // Objective card container
+      const objectiveContainer = document.querySelector('[data-testid="campaign-objective-selector"]');
+      if (objectiveContainer) {
+        objectiveContainer[fiberKey] = {
+          memoizedProps: {
+            value: 'OUTCOME_TRAFFIC',
+          },
+          return: null,
+          type: { displayName: 'ObjectiveSelector', name: 'ObjectiveSelector' },
+        };
+      }
+
+      // Budget type dropdown
+      const budgetType = document.querySelector('[aria-label="Budget type"]');
+      if (budgetType) {
+        budgetType[fiberKey] = {
+          memoizedProps: {
+            value: 'lifetime',
+          },
+          return: null,
+          type: { displayName: 'BudgetTypeDropdown', name: 'BudgetTypeDropdown' },
+        };
+      }
+
+      console.log('[Fixture] React Fiber simulation attached with key:', fiberKey);
+    })();
+
+    // Make objective cards interactive for manual testing
+    document.querySelectorAll('.objective-card').forEach(card => {
+      card.addEventListener('click', function() {
+        document.querySelectorAll('.objective-card').forEach(c => {
+          c.setAttribute('aria-checked', 'false');
+          c.setAttribute('aria-selected', 'false');
+          c.classList.remove('selected');
+          c.removeAttribute('data-selected');
+        });
+        this.setAttribute('aria-checked', 'true');
+        this.setAttribute('aria-selected', 'true');
+        this.classList.add('selected');
+        this.setAttribute('data-selected', 'true');
+      });
+    });
+
+    // Make CBO toggle interactive
+    document.querySelector('.ams-switch').addEventListener('click', function() {
+      const checked = this.getAttribute('aria-checked') === 'true';
+      this.setAttribute('aria-checked', String(!checked));
+    });
+  </script>
+</body>
+</html>

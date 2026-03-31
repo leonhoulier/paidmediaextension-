@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DLG Governance</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 340px;
+      min-height: 200px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #1F2937;
+      background: #fff;
+    }
+
+    .popup {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .popup__header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+      border-bottom: 1px solid #E5E7EB;
+      background: #F9FAFB;
+    }
+
+    .popup__logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #4F46E5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .popup__logo svg {
+      color: white;
+    }
+
+    .popup__title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .popup__version {
+      font-size: 11px;
+      color: #6B7280;
+    }
+
+    .popup__body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .popup__field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .popup__label {
+      font-size: 11px;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .popup__value {
+      font-size: 13px;
+      font-weight: 500;
+      color: #1F2937;
+    }
+
+    .popup__value--empty {
+      color: #9CA3AF;
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    .popup__status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .popup__status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .popup__status-dot--synced {
+      background: #16A34A;
+    }
+
+    .popup__status-dot--pending {
+      background: #CA8A04;
+    }
+
+    .popup__status-dot--error {
+      background: #DC2626;
+    }
+
+    .popup__divider {
+      height: 1px;
+      background: #E5E7EB;
+    }
+
+    .popup__actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .popup__btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #E5E7EB;
+      background: #fff;
+      color: #1F2937;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 150ms ease;
+    }
+
+    .popup__btn:hover {
+      background: #F9FAFB;
+    }
+
+    .popup__btn--primary {
+      background: #4F46E5;
+      color: white;
+      border-color: #4F46E5;
+    }
+
+    .popup__btn--primary:hover {
+      background: #4338CA;
+    }
+
+    .popup__btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .popup__footer {
+      padding: 12px 16px;
+      border-top: 1px solid #E5E7EB;
+      background: #F9FAFB;
+      text-align: center;
+    }
+
+    .popup__link {
+      color: #4F46E5;
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .popup__link:hover {
+      text-decoration: underline;
+    }
+
+    #loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #6B7280;
+      font-size: 13px;
+    }
+
+    #error {
+      display: none;
+      padding: 12px 16px;
+      background: #FEE2E2;
+      color: #991B1B;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    /* ── Pairing View ─────────────────────────── */
+    #pairing-view {
+      display: none;
+      padding: 16px;
+    }
+
+    .pairing__description {
+      font-size: 13px;
+      color: #4B5563;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .pairing__form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .pairing__input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pairing__input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+      color: #1F2937;
+      outline: none;
+      transition: border-color 150ms ease;
+    }
+
+    .pairing__input:focus {
+      border-color: #4F46E5;
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    }
+
+    .pairing__input::placeholder {
+      color: #9CA3AF;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    #pairing-error {
+      display: none;
+      padding: 8px 10px;
+      background: #FEE2E2;
+      color: #991B1B;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    #pairing-success {
+      display: none;
+      padding: 8px 10px;
+      background: #DCFCE7;
+      color: #166534;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    /* ── Unpair button ─────────────────────────── */
+    .popup__btn--danger {
+      color: #DC2626;
+      border-color: #FCA5A5;
+    }
+
+    .popup__btn--danger:hover {
+      background: #FEF2F2;
+    }
+
+    /* ── Debug mode button ─────────────────────────── */
+    .popup__btn--debug {
+      color: #7C3AED;
+      border-color: #C4B5FD;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+      font-size: 12px;
+    }
+
+    .popup__btn--debug:hover {
+      background: #F5F3FF;
+    }
+
+    .popup__btn--debug.active {
+      background: #7C3AED;
+      color: white;
+      border-color: #7C3AED;
+    }
+
+    .popup__btn--debug.active:hover {
+      background: #6D28D9;
+    }
+
+    /* ── Feedback toast ─────────────────────────── */
+    #feedback {
+      display: none;
+      padding: 8px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    #feedback.feedback--success {
+      background: #DCFCE7;
+      color: #166534;
+      display: block;
+    }
+
+    #feedback.feedback--error {
+      background: #FEE2E2;
+      color: #991B1B;
+      display: block;
+    }
+
+    /* ── Selector Health section ─────────────────── */
+    .selector-health {
+      display: none;
+    }
+
+    .selector-health__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+
+    .selector-health__title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .selector-health__toggle {
+      font-size: 10px;
+      color: #9CA3AF;
+    }
+
+    .selector-health__body {
+      display: none;
+      margin-top: 8px;
+    }
+
+    .selector-health__body.expanded {
+      display: block;
+    }
+
+    .selector-health__stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .selector-health__stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+    }
+
+    .selector-health__stat-value {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .selector-health__stat-value--good {
+      color: #16A34A;
+    }
+
+    .selector-health__stat-value--warn {
+      color: #CA8A04;
+    }
+
+    .selector-health__stat-value--bad {
+      color: #DC2626;
+    }
+
+    .selector-health__stat-label {
+      font-size: 10px;
+      color: #9CA3AF;
+      text-transform: uppercase;
+    }
+
+    .selector-health__failures {
+      margin-top: 6px;
+    }
+
+    .selector-health__failure {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid #F3F4F6;
+      font-size: 11px;
+    }
+
+    .selector-health__failure-field {
+      font-family: 'SF Mono', 'Menlo', monospace;
+      color: #1F2937;
+    }
+
+    .selector-health__failure-count {
+      color: #DC2626;
+      font-weight: 600;
+    }
+
+    .selector-health__failure-platform {
+      color: #9CA3AF;
+      font-size: 10px;
+    }
+
+    .selector-health__clear {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #6B7280;
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+
+    .selector-health__clear:hover {
+      color: #1F2937;
+    }
+  </style>
+</head>
+<body>
+  <div class="popup">
+    <div class="popup__header">
+      <div class="popup__logo">
+        <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+          <path d="M7.467.133a1.75 1.75 0 011.066 0l5.25 1.68A1.75 1.75 0 0115 3.48V7c0 1.566-.32 3.182-1.303 4.682-.983 1.498-2.585 2.813-5.032 3.855a1.7 1.7 0 01-1.33 0c-2.447-1.042-4.049-2.357-5.032-3.855C1.32 10.182 1 8.566 1 7V3.48a1.75 1.75 0 011.217-1.667l5.25-1.68z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="popup__title">DLG Governance</div>
+        <div class="popup__version" id="version">v—</div>
+      </div>
+    </div>
+
+    <div id="loading">Loading...</div>
+
+    <!-- ── Pairing View (shown when not paired) ──────────── -->
+    <div id="pairing-view">
+      <p class="pairing__description">
+        Enter your invite code to connect this extension to your organization.
+        You can find this code in the Admin Portal under Settings.
+      </p>
+
+      <div class="pairing__form">
+        <div id="pairing-error"></div>
+        <div id="pairing-success"></div>
+
+        <div class="pairing__input-group">
+          <label class="popup__label" for="invite-code">Invite Code</label>
+          <input
+            type="text"
+            id="invite-code"
+            class="pairing__input"
+            placeholder="Paste your invite code..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+
+        <button class="popup__btn popup__btn--primary" id="btn-pair">
+          Connect Extension
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Main View (shown when paired) ──────────── -->
+    <div class="popup__body" id="body" style="display: none;">
+      <div id="error"></div>
+      <div id="feedback"></div>
+
+      <div class="popup__field">
+        <span class="popup__label">Organization</span>
+        <span class="popup__value" id="org-name">—</span>
+      </div>
+
+      <div class="popup__field">
+        <span class="popup__label">Active Account</span>
+        <span class="popup__value" id="account-id">—</span>
+      </div>
+
+      <div class="popup__field">
+        <span class="popup__label">Sync Status</span>
+        <div class="popup__status">
+          <span class="popup__status-dot" id="sync-dot"></span>
+          <span class="popup__value" id="sync-status">—</span>
+        </div>
+      </div>
+
+      <div class="popup__divider"></div>
+
+      <!-- Selector Health Section -->
+      <div class="selector-health" id="selector-health">
+        <div class="selector-health__header" id="selector-health-toggle">
+          <span class="selector-health__title">Selector Health</span>
+          <span class="selector-health__toggle" id="selector-health-arrow">Show</span>
+        </div>
+        <div class="selector-health__body" id="selector-health-body">
+          <div class="selector-health__stats">
+            <div class="selector-health__stat">
+              <span class="selector-health__stat-value" id="sh-success-rate">--</span>
+              <span class="selector-health__stat-label">Success</span>
+            </div>
+            <div class="selector-health__stat">
+              <span class="selector-health__stat-value" id="sh-total">--</span>
+              <span class="selector-health__stat-label">Total</span>
+            </div>
+            <div class="selector-health__stat">
+              <span class="selector-health__stat-value" id="sh-failures">--</span>
+              <span class="selector-health__stat-label">Failures</span>
+            </div>
+          </div>
+          <div class="selector-health__failures" id="sh-failing-fields"></div>
+          <button class="selector-health__clear" id="sh-clear">Clear telemetry data</button>
+        </div>
+      </div>
+
+      <div class="popup__divider"></div>
+
+      <div class="popup__actions">
+        <button class="popup__btn popup__btn--primary" id="btn-refresh">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+            <path d="M8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.38A7.001 7.001 0 0115 8a.75.75 0 01-1.5 0A5.5 5.5 0 008 2.5zM2.5 8a.75.75 0 00-1.5 0 7.001 7.001 0 0012.193 4.693l1.38 1.38a.25.25 0 00.427-.177V10.25a.25.25 0 00-.25-.25h-3.646a.25.25 0 00-.177.427l1.204 1.204A5.487 5.487 0 018 13.5 5.5 5.5 0 012.5 8z"/>
+          </svg>
+          Force Refresh
+        </button>
+        <button class="popup__btn" id="btn-toggle-sidebar">
+          Toggle Sidebar
+        </button>
+        <button class="popup__btn popup__btn--debug" id="btn-debug-mode">
+          Selector Debug Mode: OFF
+        </button>
+        <button class="popup__btn popup__btn--danger" id="btn-unpair">
+          Disconnect Extension
+        </button>
+      </div>
+    </div>
+
+    <div class="popup__footer">
+      <a class="popup__link" id="admin-link" href="#" target="_blank">
+        Open Admin Portal
+      </a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
