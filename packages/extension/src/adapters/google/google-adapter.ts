@@ -952,9 +952,12 @@ export class GoogleAdsAdapter implements PlatformAdapter {
       const injectionPoint = this.getInjectionPoint(rule.ruleType, fieldPath);
 
       if (injectionPoint) {
+        const bannerStatus = result.status === 'unknown'
+          ? 'warning'
+          : result.passed ? 'success' : 'error';
         renderValidationBanner({
-          message: result.message,
-          status: result.passed ? 'success' : 'error',
+          message: result.status === 'unknown' ? `${result.message} (couldn't verify)` : result.message,
+          status: bannerStatus,
           fieldPath,
           injectionPoint,
         });
@@ -992,7 +995,7 @@ export class GoogleAdsAdapter implements PlatformAdapter {
   private updateBodyClasses(results: RuleEvaluationResult[]): void {
     // Remove existing governance state classes
     const existingClasses = Array.from(document.body.classList).filter(
-      (c) => c.startsWith('gov-valid-') || c.startsWith('gov-invalid-'),
+      (c) => c.startsWith('gov-valid-') || c.startsWith('gov-invalid-') || c.startsWith('gov-unknown-'),
     );
     for (const cls of existingClasses) {
       document.body.classList.remove(cls);
@@ -1004,7 +1007,9 @@ export class GoogleAdsAdapter implements PlatformAdapter {
       if (!rule?.condition.field) continue;
 
       const fieldSlug = rule.condition.field.replace(/\./g, '-');
-      const prefix = result.passed ? 'gov-valid' : 'gov-invalid';
+      const prefix = result.status === 'unknown'
+        ? 'gov-unknown'
+        : result.passed ? 'gov-valid' : 'gov-invalid';
       document.body.classList.add(`${prefix}-${fieldSlug}`);
     }
 

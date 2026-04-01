@@ -263,14 +263,26 @@ async function runEvaluation(preExtractedValues?: Record<string, unknown>): Prom
     console.log(`[VALIDATION] 📊 Field values: ${nonNullFields.length} non-null of ${Object.keys(fieldValues).length} total`);
     nonNullFields.forEach(([k, v]) => console.log(`[VALIDATION]   ${k}: ${JSON.stringify(v)?.substring(0, 100)}`));
 
-    // CRITICAL: bestFieldValues is the monotonically-improving source of truth
-    // New non-null values get added but old values NEVER get removed
-    // This prevents the MutationObserver race condition from wiping good data
+    // bestFieldValues tracks the latest known field state.
+    // When extraction returns null for a key that previously had a value,
+    // the cached value is CLEARED so the evaluator sees the actual current state.
     if (!bestFieldValues) {
       bestFieldValues = {};
     }
-    for (const [k, v] of nonNullFields) {
-      bestFieldValues[k] = v;
+
+    // Clear keys that are now null (field was removed or extraction failed)
+    for (const key of Object.keys(bestFieldValues)) {
+      if (!(key in fieldValues)) {
+        delete bestFieldValues[key];
+      }
+    }
+    // Merge non-null values; delete keys that are explicitly null/undefined
+    for (const [k, v] of Object.entries(fieldValues)) {
+      if (v !== null && v !== undefined) {
+        bestFieldValues[k] = v;
+      } else {
+        delete bestFieldValues[k];
+      }
     }
 
     // USE bestFieldValues as THE field values for evaluation — not the current extraction
@@ -372,9 +384,12 @@ function updateUI(
     );
 
     if (injectionPoint) {
+      const bannerStatus = result.status === 'unknown'
+        ? 'warning'
+        : result.passed ? 'success' : 'error';
       renderValidationBanner({
-        message: result.message,
-        status: result.passed ? 'success' : 'error',
+        message: result.status === 'unknown' ? `${result.message} (couldn't verify)` : result.message,
+        status: bannerStatus,
         fieldPath: rule.condition.field ?? '',
         injectionPoint,
       });
@@ -436,7 +451,7 @@ function updateUI(
 function updateBodyClasses(results: RuleEvaluationResult[]): void {
   // Remove existing governance classes
   const existingClasses = Array.from(document.body.classList).filter(
-    (c) => c.startsWith('gov-valid-') || c.startsWith('gov-invalid-')
+    (c) => c.startsWith('gov-valid-') || c.startsWith('gov-invalid-') || c.startsWith('gov-unknown-')
   );
   for (const cls of existingClasses) {
     document.body.classList.remove(cls);
@@ -448,7 +463,9 @@ function updateBodyClasses(results: RuleEvaluationResult[]): void {
     if (!rule?.condition.field) continue;
 
     const fieldSlug = rule.condition.field.replace(/\./g, '-');
-    const prefix = result.passed ? 'gov-valid' : 'gov-invalid';
+    const prefix = result.status === 'unknown'
+      ? 'gov-unknown'
+      : result.passed ? 'gov-valid' : 'gov-invalid';
     document.body.classList.add(`${prefix}-${fieldSlug}`);
   }
 }
@@ -681,7 +698,7 @@ function cleanup(): void {
 
   // Remove body classes
   const govClasses = Array.from(document.body.classList).filter(
-    (c) => c.startsWith('gov-valid-') || c.startsWith('gov-invalid-')
+    (c) => c.startsWith('gov-valid-') || c.startsWith('gov-invalid-') || c.startsWith('gov-unknown-')
   );
   for (const cls of govClasses) {
     document.body.classList.remove(cls);

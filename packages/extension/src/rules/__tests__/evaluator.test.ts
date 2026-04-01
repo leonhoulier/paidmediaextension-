@@ -166,6 +166,102 @@ describe('evaluateRules()', () => {
 });
 
 // ---------------------------------------------------------------------------
+// evaluateRule() status field
+// ---------------------------------------------------------------------------
+describe('evaluateRule() status field', () => {
+  it('returns status "passed" when rule passes', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.EQUALS, field: 'name', value: 'Campaign' },
+    });
+    const results = evaluateRules({ name: 'Campaign' }, [rule]);
+    expect(results[0].status).toBe('passed');
+    expect(results[0].passed).toBe(true);
+  });
+
+  it('returns status "failed" when rule fails and field value is present', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.EQUALS, field: 'name', value: 'Campaign' },
+    });
+    const results = evaluateRules({ name: 'Wrong' }, [rule]);
+    expect(results[0].status).toBe('failed');
+    expect(results[0].passed).toBe(false);
+  });
+
+  it('returns status "unknown" when field value is null', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.EQUALS, field: 'name', value: 'Campaign' },
+    });
+    const results = evaluateRules({ name: null }, [rule]);
+    expect(results[0].status).toBe('unknown');
+    expect(results[0].passed).toBe(false);
+  });
+
+  it('returns status "unknown" when field value is undefined', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.EQUALS, field: 'name', value: 'Campaign' },
+    });
+    const results = evaluateRules({ name: undefined }, [rule]);
+    expect(results[0].status).toBe('unknown');
+    expect(results[0].passed).toBe(false);
+  });
+
+  it('returns status "unknown" when field key is missing entirely', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.EQUALS, field: 'name', value: 'Campaign' },
+    });
+    const results = evaluateRules({}, [rule]);
+    expect(results[0].status).toBe('unknown');
+    expect(results[0].passed).toBe(false);
+  });
+
+  it('IS_SET with null returns "failed" (not "unknown") since it explicitly checks presence', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.IS_SET, field: 'name' },
+    });
+    const results = evaluateRules({ name: null }, [rule]);
+    expect(results[0].status).toBe('failed');
+    expect(results[0].passed).toBe(false);
+  });
+
+  it('IS_NOT_SET with null returns "passed" (not "unknown") since it explicitly checks absence', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.IS_NOT_SET, field: 'name' },
+    });
+    const results = evaluateRules({ name: null }, [rule]);
+    expect(results[0].status).toBe('passed');
+    expect(results[0].passed).toBe(true);
+  });
+
+  it('AND composite with missing field returns "failed" (composites always evaluate)', () => {
+    const rule = makeRule({
+      condition: {
+        operator: RuleOperator.AND,
+        conditions: [
+          { operator: RuleOperator.IS_SET, field: 'name' },
+          { operator: RuleOperator.IS_SET, field: 'budget' },
+        ],
+      },
+    });
+    const results = evaluateRules({ name: 'X' }, [rule]);
+    // The AND composite evaluates normally; budget IS_SET fails → overall fails
+    expect(results[0].status).toBe('failed');
+    expect(results[0].passed).toBe(false);
+  });
+
+  it('preserves backwards-compatible passed boolean alongside status', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.EQUALS, field: 'name', value: 'Campaign' },
+    });
+    const results = evaluateRules({}, [rule]);
+    // unknown => passed is false for backwards compat
+    expect(results[0].passed).toBe(false);
+    expect(results[0].status).toBe('unknown');
+    expect(typeof results[0].passed).toBe('boolean');
+    expect(typeof results[0].status).toBe('string');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // evaluateCondition() -- composite conditions (via evaluateRules)
 // ---------------------------------------------------------------------------
 describe('evaluateCondition() via evaluateRules', () => {
@@ -658,6 +754,7 @@ describe('computeScore()', () => {
       ruleId: 'r-1',
       ruleName: 'Rule',
       passed: true,
+      status: 'passed',
       message: 'msg',
       category: 'general',
       enforcement: EnforcementMode.WARNING,
@@ -684,8 +781,8 @@ describe('computeScore()', () => {
 
   it('mix of passed/failed computes correctly', () => {
     const score = computeScore([
-      makeResult({ ruleId: 'r1', passed: true }),
-      makeResult({ ruleId: 'r2', passed: false }),
+      makeResult({ ruleId: 'r1', passed: true, status: 'passed' }),
+      makeResult({ ruleId: 'r2', passed: false, status: 'failed' }),
     ]);
     // Both WARNING (weight 1): 1 passed / 2 total = 50%
     expect(score.overall).toBe(50);
@@ -695,8 +792,8 @@ describe('computeScore()', () => {
 
   it('blocking rules count double weight', () => {
     const score = computeScore([
-      makeResult({ ruleId: 'r1', passed: true, enforcement: EnforcementMode.WARNING }),
-      makeResult({ ruleId: 'r2', passed: false, enforcement: EnforcementMode.BLOCKING }),
+      makeResult({ ruleId: 'r1', passed: true, status: 'passed', enforcement: EnforcementMode.WARNING }),
+      makeResult({ ruleId: 'r2', passed: false, status: 'failed', enforcement: EnforcementMode.BLOCKING }),
     ]);
     // WARNING passed (weight 1) + BLOCKING failed (weight 2) = 1/3 = 33%
     expect(score.overall).toBe(33);
@@ -704,12 +801,41 @@ describe('computeScore()', () => {
 
   it('category breakdown', () => {
     const score = computeScore([
-      makeResult({ ruleId: 'r1', passed: true, category: 'naming' }),
-      makeResult({ ruleId: 'r2', passed: false, category: 'naming' }),
-      makeResult({ ruleId: 'r3', passed: true, category: 'budget' }),
+      makeResult({ ruleId: 'r1', passed: true, status: 'passed', category: 'naming' }),
+      makeResult({ ruleId: 'r2', passed: false, status: 'failed', category: 'naming' }),
+      makeResult({ ruleId: 'r3', passed: true, status: 'passed', category: 'budget' }),
     ]);
     expect(score.byCategory['naming']).toBe(50);
     expect(score.byCategory['budget']).toBe(100);
+  });
+
+  it('unknown status rules are excluded from score calculation', () => {
+    const score = computeScore([
+      makeResult({ ruleId: 'r1', passed: true, status: 'passed' }),
+      makeResult({ ruleId: 'r2', passed: false, status: 'unknown' }),
+    ]);
+    // Only the passed rule counts: 1/1 = 100%
+    expect(score.overall).toBe(100);
+    expect(score.passedCount).toBe(1);
+    expect(score.totalCount).toBe(2);
+  });
+
+  it('all unknown returns score 100', () => {
+    const score = computeScore([
+      makeResult({ ruleId: 'r1', passed: false, status: 'unknown' }),
+      makeResult({ ruleId: 'r2', passed: false, status: 'unknown' }),
+    ]);
+    // No verifiable rules, score defaults to 100
+    expect(score.overall).toBe(100);
+  });
+
+  it('unknown rules do not appear in category scores', () => {
+    const score = computeScore([
+      makeResult({ ruleId: 'r1', passed: true, status: 'passed', category: 'naming' }),
+      makeResult({ ruleId: 'r2', passed: false, status: 'unknown', category: 'naming' }),
+    ]);
+    // Only r1 counts for naming category: 1/1 = 100%
+    expect(score.byCategory['naming']).toBe(100);
   });
 });
 

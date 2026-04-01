@@ -61,26 +61,58 @@ function evaluateRule(
 ): RuleEvaluationResult {
   let passed: boolean;
   let fieldValue: unknown;
+  let status: 'passed' | 'failed' | 'unknown';
 
   try {
-    passed = evaluateCondition(fieldValues, rule.condition, namingTemplates);
+    // Extract the field value first to determine if it's available
     fieldValue = rule.condition.field
       ? getNestedValue(fieldValues, rule.condition.field)
       : undefined;
 
+    // Check if the field value is missing/unextractable for simple conditions.
+    // For composite conditions (AND/OR) or operators that explicitly check presence
+    // (IS_SET, IS_NOT_SET), we always evaluate normally.
+    const isPresenceOperator =
+      rule.condition.operator === RuleOperator.IS_SET ||
+      rule.condition.operator === RuleOperator.IS_NOT_SET;
+    const isCompositeOperator =
+      rule.condition.operator === RuleOperator.AND ||
+      rule.condition.operator === RuleOperator.OR;
+    const isServerSideOperator =
+      rule.condition.operator === RuleOperator.MATCHES_EXTERNAL ||
+      rule.condition.operator === RuleOperator.CROSS_ENTITY_EQUALS;
+
+    const fieldIsMissing =
+      rule.condition.field &&
+      (fieldValue === undefined || fieldValue === null) &&
+      !isPresenceOperator &&
+      !isCompositeOperator &&
+      !isServerSideOperator;
+
+    if (fieldIsMissing) {
+      // Field value couldn't be extracted -- we can't determine pass/fail
+      passed = false;
+      status = 'unknown';
+    } else {
+      passed = evaluateCondition(fieldValues, rule.condition, namingTemplates);
+      status = passed ? 'passed' : 'failed';
+    }
+
     // Debug logging for rule evaluation
     if (!passed && rule.condition.field) {
-      console.log(`[RULE-DEBUG] Rule "${rule.name}" checking field: "${rule.condition.field}", actualValue:`, fieldValue);
+      console.log(`[RULE-DEBUG] Rule "${rule.name}" checking field: "${rule.condition.field}", actualValue:`, fieldValue, `status: ${status}`);
     }
   } catch (err) {
     logger.error(`Error evaluating rule "${rule.name}":`, err);
     passed = false;
+    status = 'unknown';
   }
 
   return {
     ruleId: rule.id,
     ruleName: rule.name,
     passed,
+    status,
     message: rule.ui.message,
     category: rule.ui.category,
     enforcement: rule.enforcement,
@@ -507,6 +539,11 @@ export function computeScore(results: RuleEvaluationResult[]): ComplianceScore {
   const categoryTotal: Record<string, number> = {};
 
   for (const result of results) {
+    // Unknown rules are excluded from score calculation — they shouldn't penalize
+    if (result.status === 'unknown') {
+      continue;
+    }
+
     // Blocking rules count double in score calculation
     const weight = result.enforcement === EnforcementMode.BLOCKING ? 2 : 1;
 

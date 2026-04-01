@@ -73,6 +73,7 @@ describe('Approval Flow', () => {
     mockViolation = {
       ruleId: 'rule-1',
       passed: false,
+      status: 'failed',
       message: 'Campaign budget exceeds $10,000 and requires approval',
       enforcement: EnforcementMode.SECOND_APPROVER,
       fieldValue: 15000,

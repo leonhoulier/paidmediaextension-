@@ -299,6 +299,10 @@ const SIDEBAR_STYLES = `
     border-left-width: 4px;
   }
 
+  .guideline--unknown {
+    border-left-color: #F59E0B;
+  }
+
   .guideline__icon {
     flex-shrink: 0;
     margin-top: 2px;
@@ -311,6 +315,10 @@ const SIDEBAR_STYLES = `
 
   .guideline__icon--fail {
     color: var(--gov-error);
+  }
+
+  .guideline__icon--unknown {
+    color: #F59E0B;
   }
 
   .guideline__content {
@@ -510,7 +518,7 @@ export class Sidebar {
 
     return sortedKeys.map((name) => {
       const guidelines = map.get(name)!;
-      const passedCount = guidelines.filter((g) => g.passed).length;
+      const passedCount = guidelines.filter((g) => g.status === 'passed' || (!g.status && g.passed)).length;
       const prevCategory = this.categories.find((c) => c.name === name);
 
       return {
@@ -535,8 +543,13 @@ export class Sidebar {
 
     const totalPassed = this.categories.reduce((s, c) => s + c.passedCount, 0);
     const totalCount = this.categories.reduce((s, c) => s + c.totalCount, 0);
-    const totalFailing = totalCount - totalPassed;
-    const pct = totalCount > 0 ? Math.round((totalPassed / totalCount) * 100) : 100;
+    const totalUnknown = this.categories.reduce(
+      (s, c) => s + c.guidelines.filter((g) => g.status === 'unknown').length,
+      0
+    );
+    const totalFailing = totalCount - totalPassed - totalUnknown;
+    const verifiableCount = totalCount - totalUnknown;
+    const pct = verifiableCount > 0 ? Math.round((totalPassed / verifiableCount) * 100) : 100;
 
     const sidebar = document.createElement('div');
     sidebar.className = 'sidebar';
@@ -553,7 +566,7 @@ export class Sidebar {
           </button>
         </div>
         <div class="sidebar__summary-score">
-          <span>${totalCount} Guidelines - ${totalPassed} Passing, ${totalFailing} Failing</span>
+          <span>${totalCount} Guidelines - ${totalPassed} Passing, ${totalFailing} Failing${totalUnknown > 0 ? `, ${totalUnknown} Unverified` : ''}</span>
         </div>
         <div class="sidebar__progress-bar">
           <div class="sidebar__progress-fill" style="width: ${pct}%"></div>
@@ -624,18 +637,28 @@ export class Sidebar {
    * Render a single guideline row.
    */
   private renderGuideline(result: RuleEvaluationResult): string {
-    const passClass = result.passed ? 'guideline--pass' : 'guideline--fail';
-    const blockingClass = !result.passed && result.enforcement === EnforcementMode.BLOCKING
+    const isUnknown = result.status === 'unknown';
+
+    const passClass = isUnknown
+      ? 'guideline--unknown'
+      : result.passed
+        ? 'guideline--pass'
+        : 'guideline--fail';
+    const blockingClass = !result.passed && !isUnknown && result.enforcement === EnforcementMode.BLOCKING
       ? 'guideline--blocking'
       : '';
 
-    const iconClass = result.passed
-      ? 'guideline__icon guideline__icon--pass'
-      : 'guideline__icon guideline__icon--fail';
+    const iconClass = isUnknown
+      ? 'guideline__icon guideline__icon--unknown'
+      : result.passed
+        ? 'guideline__icon guideline__icon--pass'
+        : 'guideline__icon guideline__icon--fail';
 
-    const icon = result.passed ? ICONS.check : ICONS.x;
+    const icon = isUnknown ? ICONS.warning : result.passed ? ICONS.check : ICONS.x;
 
-    const enforcementLabel = this.getEnforcementLabel(result.enforcement);
+    const enforcementLabel = isUnknown
+      ? "COULDN'T VERIFY"
+      : this.getEnforcementLabel(result.enforcement);
 
     return `
       <li class="guideline ${passClass} ${blockingClass}"
@@ -646,7 +669,7 @@ export class Sidebar {
         <span class="${iconClass}">${icon}</span>
         <div class="guideline__content">
           <div class="guideline__name">${escapeHtml(result.ruleName)}</div>
-          ${!result.passed ? `<div class="guideline__enforcement">${enforcementLabel}</div>` : ''}
+          ${!result.passed || isUnknown ? `<div class="guideline__enforcement">${enforcementLabel}</div>` : ''}
         </div>
         <span class="guideline__link-icon">${LINK_ICON}</span>
       </li>

@@ -902,15 +902,19 @@ export class MetaAdapter implements PlatformAdapter {
         continue;
       }
 
+      const bannerStatus = result.status === 'unknown'
+        ? 'warning'
+        : result.passed ? 'success' : 'error';
+
       console.log(`[UI-UPDATE] ➕ Rendering banner for ${fieldPath}:`, {
         ruleName: rule.name,
         passed: result.passed,
-        status: result.passed ? 'success' : 'error'
+        status: bannerStatus
       });
 
       const banner = renderValidationBanner({
-        message: result.message,
-        status: result.passed ? 'success' : 'error',
+        message: result.status === 'unknown' ? `${result.message} (couldn't verify)` : result.message,
+        status: bannerStatus,
         fieldPath,
         injectionPoint,
       });
@@ -968,8 +972,8 @@ export class MetaAdapter implements PlatformAdapter {
   private updateBodyClasses(results: RuleEvaluationResult[]): void {
     // Remove existing governance classes (both old gov- and new dlg- prefixes)
     const existingClasses = Array.from(document.body.classList).filter(
-      (c) => c.startsWith('dlg-valid-') || c.startsWith('dlg-invalid-') ||
-             c.startsWith('gov-valid-') || c.startsWith('gov-invalid-'),
+      (c) => c.startsWith('dlg-valid-') || c.startsWith('dlg-invalid-') || c.startsWith('dlg-unknown-') ||
+             c.startsWith('gov-valid-') || c.startsWith('gov-invalid-') || c.startsWith('gov-unknown-'),
     );
     for (const cls of existingClasses) {
       document.body.classList.remove(cls);
@@ -981,7 +985,9 @@ export class MetaAdapter implements PlatformAdapter {
       if (!rule?.condition.field) continue;
 
       const fieldSlug = rule.condition.field.replace(/\./g, '-');
-      const prefix = result.passed ? 'dlg-valid' : 'dlg-invalid';
+      const prefix = result.status === 'unknown'
+        ? 'dlg-unknown'
+        : result.passed ? 'dlg-valid' : 'dlg-invalid';
       document.body.classList.add(`${prefix}-${fieldSlug}`);
     }
   }

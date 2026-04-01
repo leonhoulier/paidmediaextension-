@@ -144,6 +144,8 @@ export interface RuleEvaluationResult {
     ruleId: string;
     ruleName: string;
     passed: boolean;
+    /** Ternary evaluation status: 'passed', 'failed', or 'unknown' (field value couldn't be extracted) */
+    status: 'passed' | 'failed' | 'unknown';
     message: string;
     category: string;
     enforcement: EnforcementMode;
