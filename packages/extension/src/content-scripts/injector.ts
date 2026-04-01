@@ -428,7 +428,10 @@ function updateUI(
     totalCount: score.totalCount,
   });
 
-  // Update creation blocker
+  // Update creation blocker violations (but don't show the modal).
+  // The modal only appears when the user clicks Publish — the blocker's
+  // click interceptor calls show() internally. Here we just update the
+  // stored violations so the blocker has the latest list ready.
   const blockingViolations = results.filter(
     (r) => !r.passed && r.enforcement === 'blocking'
   );
@@ -437,7 +440,7 @@ function updateUI(
     if (!creationBlocker) {
       creationBlocker = new CreationBlocker();
     }
-    creationBlocker.show(blockingViolations);
+    creationBlocker.updateViolations(blockingViolations);
   } else if (creationBlocker) {
     creationBlocker.hide();
   }

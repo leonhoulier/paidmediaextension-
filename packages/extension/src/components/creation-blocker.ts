@@ -303,6 +303,14 @@ export class CreationBlocker {
   }
 
   /**
+   * Update stored violations without showing the modal.
+   * The modal will use these when the user clicks Publish.
+   */
+  updateViolations(violations: RuleEvaluationResult[]): void {
+    this.violations = violations;
+  }
+
+  /**
    * Show the blocker modal with a list of violations.
    */
   show(violations: RuleEvaluationResult[]): void {
