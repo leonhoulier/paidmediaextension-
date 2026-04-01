@@ -581,85 +581,61 @@ export class MetaAdapter implements PlatformAdapter {
       this.observer.disconnect();
     }
 
-    const debouncedHandler = debounce(async () => {
-      // Skip if observer is paused (during our own UI updates)
-      if (this.observerPaused) {
-        console.log('[INPUT-CHANGE] ⏸️ Observer paused, skipping handler');
-        return;
-      }
+    // Shared extraction + evaluation logic.
+    // forceEval=true bypasses the deepEqual guard (used for user input events).
+    // forceEval=false uses the guard (used for MutationObserver to prevent loops).
+    const extractAndEvaluate = async (forceEval: boolean) => {
+      if (this.observerPaused) return;
 
-      console.log('[INPUT-CHANGE] 🔄 Debounced handler triggered - extracting field values...');
       try {
         const newValues = await this.extractFieldValues();
-        console.log('[INPUT-CHANGE] 📊 Extracted field values:', newValues);
 
-        // Detect which fields changed (for logging purposes)
         const changedFields: string[] = [];
         for (const [field, value] of Object.entries(newValues)) {
           if (!deepEqual(value, this.fieldValues[field])) {
             changedFields.push(field);
-            console.log(`[INPUT-CHANGE] ✏️ Field changed: ${field}`, {
-              oldValue: this.fieldValues[field],
-              newValue: value
-            });
           }
         }
 
-        // Update cache FIRST (before triggering validation)
         this.fieldValues = { ...newValues };
 
-        // Always trigger validation on every observer callback.
-        // The deepEqual guard was preventing re-evaluation when field extraction
-        // returned the same values (e.g., selectors reading stale DOM state).
-        // The observer pause/resume mechanism already prevents infinite loops
-        // from our own UI mutations, so this guard is unnecessary.
-        this.initialValidationComplete = true;
-        if (changedFields.length > 0) {
-          console.log(`[FIELD-CHANGE] 🔔 ${changedFields.length} fields changed:`, changedFields);
-        } else {
-          console.log('[FIELD-CHANGE] 🔔 Re-evaluating (no detected changes but user may have edited)');
+        // MutationObserver path: only re-evaluate if fields actually changed
+        // (prevents infinite loop from our own UI mutations).
+        // User input path: always re-evaluate (forceEval=true).
+        const shouldEval = forceEval || changedFields.length > 0 || !this.initialValidationComplete;
+
+        if (shouldEval) {
+          this.initialValidationComplete = true;
+          callback('__all__', newValues);
         }
-        callback('__all__', newValues);
       } catch (error) {
         console.error('[INPUT-CHANGE] ❌ Error during field change detection:', error);
       }
-    }, OBSERVER_DEBOUNCE_MS);
+    };
 
-    this.observer = new MutationObserver((mutations) => {
-      console.log(`[MUTATION-OBSERVER] 👀 DOM mutation detected (${mutations.length} mutations)`);
-      debouncedHandler();
+    // MutationObserver: guarded by deepEqual (our UI changes don't re-trigger)
+    const debouncedMutationHandler = debounce(() => extractAndEvaluate(false), OBSERVER_DEBOUNCE_MS);
 
-      // Check if injected elements were removed by React reconciliation
+    // User input events: always force re-evaluation (user typed/clicked something)
+    const debouncedInputHandler = debounce(() => extractAndEvaluate(true), OBSERVER_DEBOUNCE_MS);
+
+    this.observer = new MutationObserver(() => {
+      debouncedMutationHandler();
       this.checkInjectedElements();
-
-      // Detect entity level transitions in multi-entity flow
       this.detectEntityTransition();
     });
 
-    console.log('[MUTATION-OBSERVER] 🎬 Starting DOM observation on document.body');
     this.observer.observe(document.body, {
       childList: true,
       subtree: true,
-      attributes: true, // Watch for attribute changes (e.g., aria-invalid, value)
+      attributes: true,
       attributeFilter: ['value', 'aria-invalid', 'aria-checked', 'aria-selected'],
     });
 
-    // Also add direct input event listeners for immediate change detection
-    // (MutationObserver may miss React state updates that don't change DOM)
-    const inputHandler = (event: Event) => {
-      const target = event.target as HTMLElement;
-      console.log(`[INPUT-EVENT] ⌨️ ${event.type} event detected on:`, {
-        tag: target.tagName,
-        type: (target as HTMLInputElement).type,
-        name: (target as HTMLInputElement).name,
-        ariaLabel: target.getAttribute('aria-label'),
-        value: (target as HTMLInputElement).value?.substring(0, 50) // first 50 chars
-      });
-      debouncedHandler();
-    };
+    // Direct input event listeners — these are real user actions, always re-evaluate
+    const inputHandler = () => debouncedInputHandler();
 
-    // Use event delegation to catch all input events
-    document.body.addEventListener('input', inputHandler, true); // capture phase
+    document.body.addEventListener('input', inputHandler, true);
     document.body.addEventListener('change', inputHandler, true);
     document.body.addEventListener('blur', inputHandler, true);
 
@@ -671,7 +647,8 @@ export class MetaAdapter implements PlatformAdapter {
       document.body.removeEventListener('input', inputHandler, true);
       document.body.removeEventListener('change', inputHandler, true);
       document.body.removeEventListener('blur', inputHandler, true);
-      debouncedHandler.cancel();
+      debouncedMutationHandler.cancel();
+      debouncedInputHandler.cancel();
     });
   }
 
