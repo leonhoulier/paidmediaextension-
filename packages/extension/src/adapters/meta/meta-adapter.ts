@@ -93,7 +93,7 @@ const TOOL_TO_ENTITY_LEVEL: Record<string, EntityLevel> = {
 };
 
 /** Debounce interval for MutationObserver callbacks (ms) - reduced for better responsiveness */
-const OBSERVER_DEBOUNCE_MS = 150;
+const OBSERVER_DEBOUNCE_MS = 300;
 
 /** Debounce interval for compliance event reporting (ms) -- max 1 batch per 5 seconds */
 const COMPLIANCE_EVENT_DEBOUNCE_MS = 5_000;
@@ -608,24 +608,18 @@ export class MetaAdapter implements PlatformAdapter {
         // Update cache FIRST (before triggering validation)
         this.fieldValues = { ...newValues };
 
-        // Trigger validation if:
-        // 1. Fields actually changed, OR
-        // 2. This is the first extraction (initial validation)
-        // This prevents infinite loop from UI mutations while ensuring initial validation runs
-        const shouldTriggerValidation = changedFields.length > 0 || !this.initialValidationComplete;
-
-        if (shouldTriggerValidation) {
-          console.log(`[FIELD-CHANGE] 🔔 Field extraction complete, triggering validation (${changedFields.length} fields changed)`);
-          if (changedFields.length > 0) {
-            console.log(`[INPUT-CHANGE] 📝 Changed fields:`, changedFields);
-          } else {
-            console.log('[INPUT-CHANGE] ℹ️ Initial validation run');
-          }
-          this.initialValidationComplete = true;
-          callback('__all__', newValues);  // Special marker to indicate full re-extraction
+        // Always trigger validation on every observer callback.
+        // The deepEqual guard was preventing re-evaluation when field extraction
+        // returned the same values (e.g., selectors reading stale DOM state).
+        // The observer pause/resume mechanism already prevents infinite loops
+        // from our own UI mutations, so this guard is unnecessary.
+        this.initialValidationComplete = true;
+        if (changedFields.length > 0) {
+          console.log(`[FIELD-CHANGE] 🔔 ${changedFields.length} fields changed:`, changedFields);
         } else {
-          console.log('[INPUT-CHANGE] ✅ No field changes detected, skipping validation (prevents infinite loop from UI updates)');
+          console.log('[FIELD-CHANGE] 🔔 Re-evaluating (no detected changes but user may have edited)');
         }
+        callback('__all__', newValues);
       } catch (error) {
         console.error('[INPUT-CHANGE] ❌ Error during field change detection:', error);
       }
