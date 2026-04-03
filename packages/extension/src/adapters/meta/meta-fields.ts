@@ -17,8 +17,15 @@
  * @module meta-fields
  */
 
-import { RemoteEvalQuery, RemoteEvalResult } from '@media-buying-governance/shared';
+import { EntityLevel, RemoteEvalQuery, RemoteEvalResult } from '@media-buying-governance/shared';
 import { findFieldElement } from './meta-selectors.js';
+import {
+  getMetaDomFieldPaths,
+  getMetaFieldPaths,
+  getMetaFieldPathsForEntityLevel,
+  getMetaRemoteEvalConfig,
+  getMetaRequireFieldMap,
+} from './meta-field-specs.js';
 import { logFieldExtraction } from '../../utils/telemetry.js';
 
 // ---------------------------------------------------------------------------
@@ -580,7 +587,7 @@ export function getCampaignCBOEnabled(): boolean | null {
  */
 export function getAdSetName(): string | null {
   const el = findFieldElement('ad_set.name');
-  if ((el.tagName === 'INPUT')) {
+  if (el instanceof HTMLInputElement) {
     return el.value || null;
   }
   if (el) {
@@ -649,28 +656,6 @@ export function getGeoLocations(): string[] | null {
     }
   }
 
-  // Strategy 4: Search within parent container
-  const parent = container.closest<HTMLElement>('[class*="location"], [class*="geo"]');
-  if (parent) {
-    const tags = parent.querySelectorAll<HTMLElement>('.tag, .chip, [role="listitem"]');
-    const locations: string[] = [];
-    for (const el of tags) {
-      const text = el.textContent?.trim();
-      if (text) locations.push(text);
-    }
-    if (locations.length > 0) return locations;
-  }
-
-  // Strategy 5: DOM text search fallback — find "Included location:" text and extract country names
-  const allText = document.body.innerText;
-  const locMatch = allText.match(/Included location[s]?:\s*\n?\s*([^\n]+)/i);
-  if (locMatch) {
-    const locText = locMatch[1].trim();
-    // Split by bullet/comma and clean up
-    const locs = locText.split(/[•,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 1);
-    if (locs.length > 0) return locs;
-  }
-
   return null;
 }
 
@@ -704,45 +689,6 @@ export function getGeoLocationCountries(): string[] | null {
       });
     }
   }
-
-  // Strategy 2: Search innerHTML (includes off-screen content in scrollable containers)
-  // Meta renders the full form but innerText only returns visible text
-  const htmlContent = document.body.innerHTML;
-  const knownCountries = Object.keys(COUNTRY_NAME_TO_CODE);
-  const foundInHtml: string[] = [];
-
-  // Look for "Included location" section in HTML, then find country names nearby
-  const inclIdx = htmlContent.indexOf('Included location');
-  if (inclIdx > -1) {
-    // Search in a window around the "Included location" text
-    const searchWindow = htmlContent.substring(inclIdx, inclIdx + 2000);
-    for (const country of knownCountries) {
-      const capitalized = country.charAt(0).toUpperCase() + country.slice(1);
-      if (searchWindow.includes(capitalized)) {
-        foundInHtml.push(COUNTRY_NAME_TO_CODE[country]);
-      }
-    }
-    if (foundInHtml.length > 0) return foundInHtml;
-  }
-
-  // Strategy 3: Broad search — find country names anywhere in page HTML
-  // Use textContent (includes all text regardless of viewport visibility)
-  const fullText = document.body.textContent ?? '';
-  const foundBroad: string[] = [];
-  for (const country of knownCountries) {
-    const capitalized = country.charAt(0).toUpperCase() + country.slice(1);
-    // Look for country name near location-related context
-    const countryIdx = fullText.indexOf(capitalized);
-    if (countryIdx > -1) {
-      // Verify it's in a location context (not just random text)
-      const context = fullText.substring(Math.max(0, countryIdx - 200), countryIdx + 100);
-      if (context.includes('location') || context.includes('Location') || context.includes('targeting') ||
-          context.includes('country') || context.includes('Included')) {
-        foundBroad.push(COUNTRY_NAME_TO_CODE[country]);
-      }
-    }
-  }
-  if (foundBroad.length > 0 && foundBroad.length <= 5) return foundBroad;
 
   return null;
 }
@@ -926,11 +872,9 @@ export function getPlacements(): string[] | null {
     const placements: string[] = [];
     for (const el of selectedElements) {
       const label = el.closest('label')?.textContent?.trim();
-      if (label) {
-        placements.push(label);
-      } else {
-        const text = el.textContent?.trim();
-        if (text) placements.push(text);
+      const normalized = normalizePlacementLabel(label ?? el.textContent ?? null);
+      if (normalized) {
+        placements.push(normalized);
       }
     }
     if (placements.length > 0) return placements;
@@ -1020,13 +964,13 @@ export function getCustomAudiences(): string[] | null {
  */
 export function getScheduleStartDate(): string | null {
   const el = findFieldElement('ad_set.schedule.start_date');
-  if ((el.tagName === 'INPUT')) {
-    return el.value || null;
+  if (el instanceof HTMLInputElement) {
+    return normalizeDateLikeValue(el.value);
   }
   if (el) {
     const props = getReactFiberProps(el);
-    if (props && typeof props.value === 'string') {
-      return props.value;
+    if (props && 'value' in props) {
+      return normalizeDateLikeValue(props.value);
     }
   }
   return null;
@@ -1037,13 +981,13 @@ export function getScheduleStartDate(): string | null {
  */
 export function getScheduleEndDate(): string | null {
   const el = findFieldElement('ad_set.schedule.end_date');
-  if ((el.tagName === 'INPUT')) {
-    return el.value || null;
+  if (el instanceof HTMLInputElement) {
+    return normalizeDateLikeValue(el.value);
   }
   if (el) {
     const props = getReactFiberProps(el);
-    if (props && typeof props.value === 'string') {
-      return props.value;
+    if (props && 'value' in props) {
+      return normalizeDateLikeValue(props.value);
     }
   }
   return null;
@@ -1054,7 +998,7 @@ export function getScheduleEndDate(): string | null {
  */
 export function getAdName(): string | null {
   const el = findFieldElement('ad.name');
-  if ((el.tagName === 'INPUT')) {
+  if (el instanceof HTMLInputElement) {
     return el.value || null;
   }
   if (el) {
@@ -1071,7 +1015,7 @@ export function getAdName(): string | null {
  */
 export function getDestinationUrl(): string | null {
   const el = findFieldElement('ad.creative.destination_url');
-  if ((el.tagName === 'INPUT')) {
+  if (el instanceof HTMLInputElement) {
     return el.value || null;
   }
   if (el) {
@@ -1137,7 +1081,7 @@ export function getPageId(): string | null {
     el.querySelector<HTMLElement>('[aria-selected="true"]') ??
     el.querySelector<HTMLElement>('.selected');
   if (selectedOption) {
-    return selectedOption.textContent?.trim() || null;
+    return normalizePageSelectionText(selectedOption.textContent);
   }
 
   // React Fiber fallback -- walk to PageSelector component
@@ -1145,11 +1089,17 @@ export function getPageId(): string | null {
   if (fiberProps) {
     if (typeof fiberProps.pageId === 'string') return fiberProps.pageId;
     if (typeof fiberProps.selectedPageId === 'string') return fiberProps.selectedPageId;
+    if (typeof fiberProps.value === 'string') {
+      return normalizePageSelectionText(fiberProps.value);
+    }
   }
 
   const props = getReactFiberProps(el);
-  if (props && (typeof props.pageId === 'string' || typeof props.value === 'string')) {
-    return (props.pageId as string) ?? (props.value as string);
+  if (props && typeof props.pageId === 'string') {
+    return props.pageId;
+  }
+  if (props && typeof props.value === 'string') {
+    return normalizePageSelectionText(props.value);
   }
 
   return null;
@@ -1229,119 +1179,8 @@ export function setRequireExtractionEnabled(value: boolean): void {
   requireExtractionEnabled = value;
 }
 
-// ---------------------------------------------------------------------------
-// require() Tree -> Field Path Mapping (88 fields)
-// ---------------------------------------------------------------------------
-
-/**
- * Map from our canonical field paths to the expected keys in the
- * Facebook editor tree returned by `facebookEditorTree`.
- *
- * Each entry maps `fieldPath` -> `{ store, path }` where:
- *   - `store` is the module name in the tree
- *   - `path` is the dot-separated property path within that store's state
- *
- * This mapping covers the 88 fields defined in Appendix B of the spec.
- */
-const REQUIRE_FIELD_MAP: Record<string, { store: string; path: string }> = {
-  // Campaign fields
-  'campaign.name': { store: 'AdsCampaignDataStore', path: 'name' },
-  'campaign.objective': { store: 'AdsCampaignDataStore', path: 'objective' },
-  'campaign.budget_type': { store: 'AdsCampaignDataStore', path: 'budgetType' },
-  'campaign.budget_value': { store: 'AdsCampaignDataStore', path: 'budgetValue' },
-  'campaign.cbo_enabled': { store: 'AdsCampaignDataStore', path: 'cboEnabled' },
-  'campaign.buying_type': { store: 'AdsCampaignDataStore', path: 'buyingType' },
-  'campaign.special_ad_categories': { store: 'AdsCampaignDataStore', path: 'specialAdCategories' },
-  'campaign.spending_limit': { store: 'AdsCampaignDataStore', path: 'spendingLimit' },
-  'campaign.bid_strategy': { store: 'AdsCampaignDataStore', path: 'bidStrategy' },
-  'campaign.a_b_test': { store: 'AdsCampaignDataStore', path: 'abTest' },
-
-  // Ad Set fields
-  'ad_set.name': { store: 'AdsEditorDataStore', path: 'adSetName' },
-  'ad_set.targeting.geo_locations': { store: 'AdsTargetingDataStore', path: 'geoLocations' },
-  'ad_set.targeting.age_range': { store: 'AdsTargetingDataStore', path: 'ageRange' },
-  'ad_set.targeting.genders': { store: 'AdsTargetingDataStore', path: 'genders' },
-  'ad_set.targeting.languages': { store: 'AdsTargetingDataStore', path: 'languages' },
-  'ad_set.targeting.custom_audiences': { store: 'AdsTargetingDataStore', path: 'customAudiences' },
-  'ad_set.targeting.excluded_audiences': { store: 'AdsTargetingDataStore', path: 'excludedAudiences' },
-  'ad_set.targeting.lookalike_audiences': { store: 'AdsTargetingDataStore', path: 'lookalikeAudiences' },
-  'ad_set.targeting.detailed_targeting': { store: 'AdsTargetingDataStore', path: 'detailedTargeting' },
-  'ad_set.targeting.connections': { store: 'AdsTargetingDataStore', path: 'connections' },
-  'ad_set.placements': { store: 'AdsEditorDataStore', path: 'placements' },
-  'ad_set.placements.type': { store: 'AdsEditorDataStore', path: 'placementType' },
-  'ad_set.placements.platforms': { store: 'AdsEditorDataStore', path: 'placementPlatforms' },
-  'ad_set.placements.positions': { store: 'AdsEditorDataStore', path: 'placementPositions' },
-  'ad_set.schedule.start_date': { store: 'AdsEditorDataStore', path: 'startDate' },
-  'ad_set.schedule.end_date': { store: 'AdsEditorDataStore', path: 'endDate' },
-  'ad_set.schedule.day_parting': { store: 'AdsEditorDataStore', path: 'dayParting' },
-  'ad_set.optimization_goal': { store: 'AdsEditorDataStore', path: 'optimizationGoal' },
-  'ad_set.billing_event': { store: 'AdsEditorDataStore', path: 'billingEvent' },
-  'ad_set.bid_amount': { store: 'AdsEditorDataStore', path: 'bidAmount' },
-  'ad_set.bid_strategy': { store: 'AdsEditorDataStore', path: 'bidStrategy' },
-  'ad_set.daily_budget': { store: 'AdsEditorDataStore', path: 'dailyBudget' },
-  'ad_set.lifetime_budget': { store: 'AdsEditorDataStore', path: 'lifetimeBudget' },
-  'ad_set.frequency_cap': { store: 'AdsEditorDataStore', path: 'frequencyCap' },
-  'ad_set.pixel_id': { store: 'AdsEditorDataStore', path: 'pixelId' },
-  'ad_set.conversion_event': { store: 'AdsEditorDataStore', path: 'conversionEvent' },
-  'ad_set.attribution_setting': { store: 'AdsEditorDataStore', path: 'attributionSetting' },
-  'ad_set.advantage_targeting': { store: 'AdsTargetingDataStore', path: 'advantageTargeting' },
-  'ad_set.advantage_placements': { store: 'AdsEditorDataStore', path: 'advantagePlacements' },
-
-  // Ad / Creative fields
-  'ad.name': { store: 'AdsCreativeEditorDataStore', path: 'adName' },
-  'ad.creative.destination_url': { store: 'AdsCreativeEditorDataStore', path: 'destinationUrl' },
-  'ad.creative.cta_type': { store: 'AdsCreativeEditorDataStore', path: 'ctaType' },
-  'ad.creative.page_id': { store: 'AdsCreativeEditorDataStore', path: 'pageId' },
-  'ad.creative.instagram_account_id': { store: 'AdsCreativeEditorDataStore', path: 'instagramAccountId' },
-  'ad.creative.headline': { store: 'AdsCreativeEditorDataStore', path: 'headline' },
-  'ad.creative.primary_text': { store: 'AdsCreativeEditorDataStore', path: 'primaryText' },
-  'ad.creative.description': { store: 'AdsCreativeEditorDataStore', path: 'description' },
-  'ad.creative.display_link': { store: 'AdsCreativeEditorDataStore', path: 'displayLink' },
-  'ad.creative.image_hash': { store: 'AdsCreativeEditorDataStore', path: 'imageHash' },
-  'ad.creative.video_id': { store: 'AdsCreativeEditorDataStore', path: 'videoId' },
-  'ad.creative.carousel_cards': { store: 'AdsCreativeEditorDataStore', path: 'carouselCards' },
-  'ad.creative.format': { store: 'AdsCreativeEditorDataStore', path: 'format' },
-  'ad.creative.dynamic_creative': { store: 'AdsCreativeEditorDataStore', path: 'dynamicCreative' },
-  'ad.creative.url_parameters': { store: 'AdsCreativeEditorDataStore', path: 'urlParameters' },
-  'ad.creative.url_tags': { store: 'AdsCreativeEditorDataStore', path: 'urlTags' },
-  'ad.creative.deep_link': { store: 'AdsCreativeEditorDataStore', path: 'deepLink' },
-  'ad.creative.app_link': { store: 'AdsCreativeEditorDataStore', path: 'appLink' },
-  'ad.creative.pixel_id': { store: 'AdsCreativeEditorDataStore', path: 'pixelId' },
-  'ad.creative.event_type': { store: 'AdsCreativeEditorDataStore', path: 'eventType' },
-  'ad.creative.offer_id': { store: 'AdsCreativeEditorDataStore', path: 'offerId' },
-  'ad.creative.lead_form_id': { store: 'AdsCreativeEditorDataStore', path: 'leadFormId' },
-  'ad.creative.canvas_id': { store: 'AdsCreativeEditorDataStore', path: 'canvasId' },
-  'ad.creative.collection_id': { store: 'AdsCreativeEditorDataStore', path: 'collectionId' },
-  'ad.creative.product_catalog_id': { store: 'AdsCreativeEditorDataStore', path: 'productCatalogId' },
-  'ad.creative.product_set_id': { store: 'AdsCreativeEditorDataStore', path: 'productSetId' },
-  'ad.creative.instant_experience_id': { store: 'AdsCreativeEditorDataStore', path: 'instantExperienceId' },
-  'ad.creative.branded_content_sponsor_id': { store: 'AdsCreativeEditorDataStore', path: 'brandedContentSponsorId' },
-  'ad.creative.advantage_creative_enhancements': { store: 'AdsCreativeEditorDataStore', path: 'advantageCreativeEnhancements' },
-
-  // Tracking / Measurement fields
-  'ad.tracking.pixel_id': { store: 'AdsCreativeEditorDataStore', path: 'trackingPixelId' },
-  'ad.tracking.app_events': { store: 'AdsCreativeEditorDataStore', path: 'appEvents' },
-  'ad.tracking.offline_event_set_id': { store: 'AdsCreativeEditorDataStore', path: 'offlineEventSetId' },
-  'ad.tracking.url_params': { store: 'AdsCreativeEditorDataStore', path: 'trackingUrlParams' },
-
-  // Advanced / Advantage+ fields
-  'campaign.advantage_plus_shopping': { store: 'AdsCampaignDataStore', path: 'advantagePlusShopping' },
-  'campaign.advantage_plus_app': { store: 'AdsCampaignDataStore', path: 'advantagePlusApp' },
-  'campaign.advantage_plus_creative': { store: 'AdsCampaignDataStore', path: 'advantagePlusCreative' },
-  'ad_set.targeting.advantage_audience': { store: 'AdsTargetingDataStore', path: 'advantageAudience' },
-  'ad_set.targeting.audience_network': { store: 'AdsTargetingDataStore', path: 'audienceNetwork' },
-  'ad_set.targeting.device_targeting': { store: 'AdsTargetingDataStore', path: 'deviceTargeting' },
-  'ad_set.targeting.publisher_platforms': { store: 'AdsTargetingDataStore', path: 'publisherPlatforms' },
-  'ad_set.targeting.mobile_os': { store: 'AdsTargetingDataStore', path: 'mobileOs' },
-  'ad_set.targeting.device_platforms': { store: 'AdsTargetingDataStore', path: 'devicePlatforms' },
-  'ad_set.targeting.brand_safety': { store: 'AdsTargetingDataStore', path: 'brandSafety' },
-  'ad_set.targeting.inventory_filter': { store: 'AdsTargetingDataStore', path: 'inventoryFilter' },
-  'ad_set.targeting.exclude_content_types': { store: 'AdsTargetingDataStore', path: 'excludeContentTypes' },
-  'ad_set.targeting.block_lists': { store: 'AdsTargetingDataStore', path: 'blockLists' },
-  'ad.creative.media_type': { store: 'AdsCreativeEditorDataStore', path: 'mediaType' },
-  'ad.creative.aspect_ratio': { store: 'AdsCreativeEditorDataStore', path: 'aspectRatio' },
-  'ad.creative.thumbnail_url': { store: 'AdsCreativeEditorDataStore', path: 'thumbnailUrl' },
-};
+// Field registry metadata lives in meta-field-specs.ts so extraction, debug,
+// and future docs all read from the same source of truth.
 
 /**
  * Extract a nested value from a store state using a dot-separated path.
@@ -1399,7 +1238,7 @@ export async function extractViaRequire(): Promise<Record<string, unknown> | nul
     // Map the tree data to our field paths
     const results: Record<string, unknown> = {};
 
-    for (const [fieldPath, mapping] of Object.entries(REQUIRE_FIELD_MAP)) {
+    for (const [fieldPath, mapping] of Object.entries(getMetaRequireFieldMap())) {
       const storeState = tree[mapping.store];
       if (storeState === undefined) continue;
 
@@ -1453,20 +1292,25 @@ function updateExtractionBodyClasses(results: Record<string, unknown>): void {
  *
  * @returns Record mapping field paths to their current values
  */
-export async function extractAllFieldValues(): Promise<Record<string, unknown>> {
+export async function extractAllFieldValues(
+  activeEntityLevel?: EntityLevel,
+): Promise<Record<string, unknown>> {
   const extractionStartTime = performance.now();
+  const allFieldPaths = getSupportedFieldPaths();
   const results: Record<string, unknown> = {};
   const strategyUsed: Record<string, 'require' | 'remoteEval' | 'fiber' | 'dom' | 'failed'> = {};
+  const activeFieldPaths = new Set(allFieldPaths);
+
+  if (activeEntityLevel) {
+    activeFieldPaths.clear();
+    for (const fieldPath of getFieldPathsForEntityLevel(activeEntityLevel)) {
+      activeFieldPaths.add(fieldPath);
+    }
+  }
 
   // Initialize all fields to null
-  for (const fieldPath of Object.keys(FIELD_GETTERS)) {
+  for (const fieldPath of allFieldPaths) {
     results[fieldPath] = null;
-  }
-  // Also include fields from the require map that aren't in DOM getters
-  for (const fieldPath of Object.keys(REQUIRE_FIELD_MAP)) {
-    if (!(fieldPath in results)) {
-      results[fieldPath] = null;
-    }
   }
 
   // ── Strategy 1: require() extraction (PRIMARY, gated by feature flag) ──
@@ -1481,6 +1325,7 @@ export async function extractAllFieldValues(): Promise<Record<string, unknown>> 
         console.log('[EXTRACTION] require() campaign.objective:', requireResults['campaign.objective']);
         console.log('[EXTRACTION] require() sample:', Object.fromEntries(Object.entries(requireResults).slice(0, 5)));
         for (const [field, value] of Object.entries(requireResults)) {
+          if (!activeFieldPaths.has(field)) continue;
           if (value !== null && value !== undefined) {
             results[field] = value;
             strategyUsed[field] = 'require';
@@ -1497,9 +1342,9 @@ export async function extractAllFieldValues(): Promise<Record<string, unknown>> 
 
   // ── Strategy 2-4: remoteEval (React Context, Fiber, multi-framework) ──
   const nullFields = Object.entries(results)
-    .filter(([, value]) => value === null)
+    .filter(([field, value]) => activeFieldPaths.has(field) && value === null)
     .map(([field]) => field)
-    .filter((field) => field in FIELD_GETTERS || field in getRemoteEvalSelectorMap());
+    .filter((field) => getMetaRemoteEvalConfig(field) !== null);
 
   console.log('[EXTRACTION] Strategy 2-4 - remoteEval for', nullFields.length, 'null fields');
   if (nullFields.length > 0) {
@@ -1532,6 +1377,7 @@ export async function extractAllFieldValues(): Promise<Record<string, unknown>> 
 
   let domExtractedCount = 0;
   for (const [fieldPath, getter] of Object.entries(FIELD_GETTERS)) {
+    if (!activeFieldPaths.has(fieldPath)) continue;
     if (results[fieldPath] !== null) continue; // Already extracted
 
     try {
@@ -1570,22 +1416,25 @@ export async function extractAllFieldValues(): Promise<Record<string, unknown>> 
   const totalDurationMs = extractionEndTime - extractionStartTime;
 
   // Log telemetry asynchronously (don't block return)
-  Promise.all(
-    Object.keys(results).map((fieldPath) => {
-      const value = results[fieldPath];
-      const strategy = strategyUsed[fieldPath] || (value !== null ? 'dom' : 'failed');
+  const telemetryFieldPaths = Array.from(activeFieldPaths);
+  if (telemetryFieldPaths.length > 0) {
+    Promise.all(
+      telemetryFieldPaths.map((fieldPath) => {
+        const value = results[fieldPath];
+        const strategy = strategyUsed[fieldPath] || (value !== null ? 'dom' : 'failed');
 
-      return logFieldExtraction({
-        timestamp: Date.now(),
-        field: fieldPath,
-        strategyUsed: strategy,
-        durationMs: totalDurationMs / Object.keys(results).length, // Approximate per-field duration
-        error: strategy === 'failed' ? 'No extraction strategy succeeded' : undefined,
-      });
-    }),
-  ).catch((err) => {
-    console.error('[TELEMETRY] Failed to log field extraction telemetry:', err);
-  });
+        return logFieldExtraction({
+          timestamp: Date.now(),
+          field: fieldPath,
+          strategyUsed: strategy,
+          durationMs: totalDurationMs / telemetryFieldPaths.length,
+          error: strategy === 'failed' ? 'No extraction strategy succeeded' : undefined,
+        });
+      }),
+    ).catch((err) => {
+      console.error('[TELEMETRY] Failed to log field extraction telemetry:', err);
+    });
+  }
 
   return results;
 }
@@ -1606,16 +1455,26 @@ async function extractViaRemoteEval(
 ): Promise<Record<string, unknown>> {
   const evalBatcher = getRemoteEvalBatcher();
 
-  const queryGetters = fieldPaths.map((field) => {
-    const method = getRemoteEvalMethod(field);
-    const selector = getRemoteEvalSelector(field);
+  const queryGetters = fieldPaths
+    .map((field) => {
+      const config = getMetaRemoteEvalConfig(field);
+      if (!config) {
+        return null;
+      }
 
-    return {
-      field,
-      method,
-      selector,
-    };
-  });
+      return {
+        field,
+        method: config.method,
+        selector: config.selector,
+      };
+    })
+    .filter((
+      getter,
+    ): getter is {
+      field: string;
+      method: RemoteEvalQuery['getters'][number]['method'];
+      selector: string;
+    } => getter !== null);
 
   const query: RemoteEvalQuery = {
     type: 'evalQuery.governance',
@@ -1643,7 +1502,9 @@ async function extractViaRemoteEval(
  */
 function normalizeExtractedValue(field: string, value: unknown): unknown {
   if (value === null || value === undefined) return null;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return normalizeStringValue(field, value);
 
   // Handle arrays
   if (Array.isArray(value)) {
@@ -1679,7 +1540,19 @@ function normalizeExtractedValue(field: string, value: unknown): unknown {
 
     // Objective: extract string value
     if (field.includes('objective')) {
-      return (obj.objective ?? obj.value ?? obj.name ?? obj.type ?? null) as string | null;
+      const objectiveValue =
+        obj.objective ??
+        obj.value ??
+        obj.name ??
+        obj.label ??
+        obj.text ??
+        obj.type ??
+        getNestedProp(obj, ['selectedOption', 'label']) ??
+        getNestedProp(obj, ['selectedOption', 'value']) ??
+        getNestedProp(obj, ['selected', 'label']);
+      return typeof objectiveValue === 'string'
+        ? normalizeStringValue(field, objectiveValue)
+        : null;
     }
 
     // Budget: extract numeric value
@@ -1687,6 +1560,34 @@ function normalizeExtractedValue(field: string, value: unknown): unknown {
       const numVal = obj.value ?? obj.amount ?? obj.budget;
       if (typeof numVal === 'number') return numVal;
       if (typeof numVal === 'string') return parseFloat(numVal) || null;
+    }
+
+    if (field.includes('budget_type')) {
+      const budgetTypeValue =
+        obj.value ??
+        obj.name ??
+        obj.label ??
+        obj.text ??
+        getNestedProp(obj, ['selectedOption', 'label']) ??
+        getNestedProp(obj, ['selectedOption', 'value']);
+      return typeof budgetTypeValue === 'string'
+        ? normalizeStringValue(field, budgetTypeValue)
+        : null;
+    }
+
+    if (field.includes('cbo_enabled')) {
+      const booleanValue =
+        obj.checked ??
+        obj.isEnabled ??
+        obj.enabled ??
+        obj.ariaChecked ??
+        obj.value;
+      return normalizeBooleanLike(booleanValue);
+    }
+
+    if (field.includes('page_id')) {
+      const pageIdValue = obj.pageId ?? obj.value ?? obj.id ?? obj.name ?? obj.label;
+      return typeof pageIdValue === 'string' ? pageIdValue : null;
     }
 
     // Generic: try common value properties
@@ -1703,108 +1604,95 @@ function normalizeExtractedValue(field: string, value: unknown): unknown {
   return String(value);
 }
 
-/**
- * Get the remoteEval selector map (for filtering which fields to query).
- */
-function getRemoteEvalSelectorMap(): Record<string, string> {
-  return {
-    // Discovered selectors from comprehensive field discovery (2026-02-08)
-    // Campaign fields
-    'campaign.name': 'input[placeholder*="campaign name" i]',
-    'campaign.objective': 'input[type="radio"][checked]',
-    'campaign.budget_type': '[role="radiogroup"]',
-    'campaign.budget_value': 'input[placeholder*="enter amount" i]',
-    'campaign.cbo_enabled': 'input[aria-label*="On"][type="checkbox"]',
+function normalizeStringValue(field: string, value: string): unknown {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
 
-    // Ad set fields
-    'ad_set.name': 'input[placeholder*="ad set name" i]',
-    'ad_set.budget_type': '[role="radiogroup"] [aria-checked="true"]',
-    'ad_set.budget_value': 'input[placeholder*="enter amount" i]',
-    'ad_set.targeting.geo_locations': '[aria-label*="Location"]',
-    'ad_set.targeting.age_range': '[aria-label*="Age"]',
-    'ad_set.targeting.genders': '[aria-label*="Gender"]',
-    'ad_set.targeting.languages': '[aria-label*="Language"]',
-    'ad_set.targeting.custom_audiences': '[aria-label*="Custom audience"]',
-    'ad_set.placements': '[aria-label*="Placement"]',
-    'ad_set.schedule.start_date': '[aria-label*="Start date"]',
-    'ad_set.schedule.end_date': '[aria-label*="End date"]',
-
-    // Ad/Creative fields
-    'ad.name': 'input[placeholder*="ad name" i]',
-    'ad.identity.page_id': 'input[placeholder*="page" i]',
-    'ad.creative.destination_url': 'input[aria-label*="Website URL"]',
-    'ad.creative.cta_type': '[aria-label*="Call to action"]',
-    'ad.preview': '[aria-label*="preview" i]',
-  };
-}
-
-/**
- * Determine the appropriate remoteEval method for a field path.
- */
-function getRemoteEvalMethod(
-  fieldPath: string,
-): RemoteEvalQuery['getters'][number]['method'] {
-  // Fields that need React Fiber traversal
-  const reactFiberFields = [
-    'campaign.objective',
-    'campaign.cbo_enabled',
-    'ad_set.targeting.geo_locations',
-    'ad_set.targeting.age_range',
-    'ad_set.targeting.genders',
-    'ad_set.targeting.languages',
-    'ad_set.targeting.custom_audiences',
-    'ad_set.placements',
-    'ad.creative.page_id',
-  ];
-
-  if (reactFiberFields.includes(fieldPath)) {
-    return 'FindReact';
+  if (field.includes('budget_type')) {
+    const lowered = trimmed.toLowerCase();
+    if (lowered.includes('daily')) return 'daily';
+    if (lowered.includes('lifetime')) return 'lifetime';
   }
 
-  // Fields that are simple input values
-  const inputValueFields = [
-    'campaign.name',
-    'campaign.budget_value',
-    'ad_set.name',
-    'ad.name',
-    'ad.creative.destination_url',
-  ];
-
-  if (inputValueFields.includes(fieldPath)) {
-    return 'elementValue';
-  }
-
-  // Default to elementText for dropdowns and text-based fields
-  return 'elementText';
+  return trimmed;
 }
 
-/**
- * Get the selector to use in a remoteEval query for a given field path.
- */
-function getRemoteEvalSelector(fieldPath: string): string {
-  return getRemoteEvalSelectorMap()[fieldPath] ?? '';
+function normalizeBooleanLike(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value !== 'string') return null;
+
+  const lowered = value.trim().toLowerCase();
+  if (['true', '1', 'on', 'enabled', 'checked'].includes(lowered)) return true;
+  if (['false', '0', 'off', 'disabled', 'unchecked'].includes(lowered)) return false;
+  return null;
 }
 
 /**
  * Get the list of all supported field paths (including require() fields).
  */
 export function getSupportedFieldPaths(): string[] {
-  const domFields = Object.keys(FIELD_GETTERS);
-  const requireFields = Object.keys(REQUIRE_FIELD_MAP);
-  const uniqueSet = new Set([...domFields, ...requireFields]);
-  return Array.from(uniqueSet);
+  return getMetaFieldPaths();
+}
+
+export function getFieldPathsForEntityLevel(entityLevel: EntityLevel): string[] {
+  return getMetaFieldPathsForEntityLevel(entityLevel);
 }
 
 /**
  * Get the list of DOM-only field paths (original 18 fields).
  */
 export function getDomFieldPaths(): string[] {
-  return Object.keys(FIELD_GETTERS);
+  return getMetaDomFieldPaths();
 }
 
 /**
  * Get the require() field mapping for testing/inspection.
  */
 export function getRequireFieldMap(): Record<string, { store: string; path: string }> {
-  return { ...REQUIRE_FIELD_MAP };
+  return getMetaRequireFieldMap();
+}
+
+function normalizePlacementLabel(value: string | null): string | null {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 80) return null;
+  if (trimmed.includes('\n')) return null;
+
+  return trimmed;
+}
+
+function normalizeDateLikeValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const looksLikeDate =
+    /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ||
+    /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(trimmed) ||
+    /^[A-Za-z]{3,9}\s+\d{1,2}(,\s*\d{4})?$/.test(trimmed);
+
+  return looksLikeDate ? trimmed : null;
+}
+
+function normalizePageSelectionText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 80) return null;
+
+  const collapsed = trimmed.replace(/\s+/g, '');
+  if (/^(edit)+$/i.test(collapsed)) {
+    return null;
+  }
+
+  if (/^(edit|identity|select page|choose page)$/i.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
 }

@@ -30,8 +30,9 @@ import { GuidelinesSidebar } from '../components/guidelines-sidebar.js';
 import { renderCampaignScore, removeCampaignScore } from '../components/campaign-score.js';
 import { CreationBlocker } from '../components/creation-blocker.js';
 import { renderNamingPreview, removeNamingPreview } from '../components/naming-preview.js';
-import { META_FIELD_SELECTORS, findElement as metaFindElement } from '../adapters/meta/meta-selectors.js';
+import { peekFieldElement } from '../adapters/meta/meta-selectors.js';
 import { GOOGLE_FIELD_SELECTORS, queryByChain, queryWithShadowDom } from '../adapters/google/google-selectors.js';
+import { buildExtractionSnapshot } from './extraction-snapshot.js';
 
 // ─── is-loaded Guard ──────────────────────────────────────────────────────────
 
@@ -118,6 +119,10 @@ async function initializeGovernance(): Promise<void> {
       `Context: account=${context.accountId}, entity=${context.entityLevel}, view=${context.view}`
     );
 
+    // Register message handling early so debug tooling still works when
+    // rules are unavailable or pairing is incomplete.
+    chrome.runtime.onMessage.addListener(handleServiceWorkerMessage);
+
     // 5. Set active account and fetch rules from service worker
     await chrome.runtime.sendMessage({
       type: 'setActiveAccount',
@@ -197,8 +202,6 @@ async function initializeGovernance(): Promise<void> {
     await runEvaluation();
 
     // 10. Listen for messages from service worker
-    chrome.runtime.onMessage.addListener(handleServiceWorkerMessage);
-
     // Track successful initialization
     trackExtensionEvent('extension_initialized', {
       platform,
@@ -316,8 +319,9 @@ async function runEvaluation(preExtractedValues?: Record<string, unknown>): Prom
       if (rule) {
         console.log(`[VALIDATION] ❌ Failed: ${rule.name}`, {
           enforcement: rule.enforcement,
-          reason: result.reason,
-          actualValue: result.actualValue
+          status: result.status,
+          actualValue: result.fieldValue,
+          expectedValue: result.expectedValue
         });
       } else {
         console.log(`[VALIDATION] ❌ Failed: Unknown rule ${result.ruleId}`);
@@ -574,13 +578,52 @@ function handleServiceWorkerMessage(
 
     case 'toggleDebugMode':
       logger.info(`Selector Debug Mode: ${message.enabled ? 'ON' : 'OFF'}`);
-      if (message.enabled) {
-        enableSelectorDebugMode();
-      } else {
-        disableSelectorDebugMode();
-      }
-      sendResponse({ success: true });
-      break;
+      void (async () => {
+        try {
+          if (message.enabled) {
+            await enableSelectorDebugMode();
+          } else {
+            disableSelectorDebugMode();
+          }
+          sendResponse({ success: true });
+        } catch (err) {
+          logger.error('Failed to toggle debug mode:', err);
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+
+    case 'captureExtractionSnapshot':
+      void (async () => {
+        try {
+          const platform = detectPlatformFromURL(window.location.href);
+          if (!platform || !currentAdapter) {
+            sendResponse({
+              success: false,
+              error: 'No supported ad platform is active in this tab.',
+            });
+            return;
+          }
+
+          const fieldValues = await currentAdapter.extractFieldValues();
+          const context = currentAdapter.detectContext();
+          const snapshot = buildExtractionSnapshot(platform, fieldValues, {
+            entityLevel: context?.entityLevel,
+          });
+
+          sendResponse({ success: true, snapshot });
+        } catch (err) {
+          logger.error('Failed to capture extraction snapshot:', err);
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
   }
 }
 
@@ -719,8 +762,27 @@ window.addEventListener('beforeunload', cleanup);
 /** CSS class used to identify debug mode overlay elements */
 const DEBUG_OVERLAY_CLASS = 'gov-debug-overlay';
 
-/** Data attribute used to mark elements styled by debug mode */
-const DEBUG_OUTLINE_ATTR = 'data-gov-debug-outline';
+/** Root element ID for the floating debug overlay layer */
+const DEBUG_OVERLAY_ROOT_ID = 'gov-debug-overlay-root';
+
+/** Summary card ID for the debug overlay HUD */
+const DEBUG_SUMMARY_ID = 'gov-debug-summary';
+
+type DebugOverlayStatus = 'extracted' | 'selector-only';
+
+interface DebugOverlayEntry {
+  target: HTMLElement;
+  box: HTMLDivElement;
+  label: HTMLDivElement;
+  fieldPath: string;
+  valuePreview: string;
+  status: DebugOverlayStatus;
+}
+
+let debugOverlayEntries: DebugOverlayEntry[] = [];
+let debugOverlayLayoutFrame: number | null = null;
+let debugOverlayMutationObserver: MutationObserver | null = null;
+let debugModeEnabled = false;
 
 /**
  * Enable Selector Debug Mode.
@@ -733,177 +795,376 @@ const DEBUG_OUTLINE_ATTR = 'data-gov-debug-outline';
  *
  * This provides instant visual feedback on selector health for manual testing.
  */
-function enableSelectorDebugMode(): void {
+async function enableSelectorDebugMode(): Promise<void> {
   // First, clean up any existing debug overlays
   disableSelectorDebugMode();
 
   const platform = detectPlatformFromURL(window.location.href);
-  if (!platform) {
+  if (!platform || !currentAdapter) {
     logger.warn('Cannot enable debug mode: platform not detected');
     return;
   }
 
-  const results: Array<{ fieldPath: string; found: boolean }> = [];
+  try {
+    const fieldValues = await currentAdapter.extractFieldValues();
+    const context = currentAdapter.detectContext();
+    const snapshot = buildExtractionSnapshot(platform, fieldValues, {
+      entityLevel: context?.entityLevel,
+    });
+    const overlayRoot = createDebugOverlayRoot();
 
-  if (platform === Platform.META) {
-    // Meta: iterate META_FIELD_SELECTORS
-    for (const config of META_FIELD_SELECTORS) {
-      const element = metaFindElement(config.strategies);
-      if (element) {
-        applyDebugOverlayFound(element, config.fieldPath);
-        results.push({ fieldPath: config.fieldPath, found: true });
-      } else {
-        applyDebugOverlayMissing(config.fieldPath);
-        results.push({ fieldPath: config.fieldPath, found: false });
+    for (const field of snapshot.fields) {
+      if (!field.hasValue && field.selectorFound !== true) {
+        continue;
       }
+
+      const element = resolveDebugFieldElement(platform, field.fieldPath);
+      if (!element) {
+        continue;
+      }
+
+      debugOverlayEntries.push(
+        createDebugOverlayEntry(overlayRoot, element, field.fieldPath, field.valuePreview, field.hasValue ? 'extracted' : 'selector-only'),
+      );
     }
-  } else if (platform === Platform.GOOGLE_ADS) {
-    // Google: iterate GOOGLE_FIELD_SELECTORS
-    for (const [fieldPath, entry] of Object.entries(GOOGLE_FIELD_SELECTORS)) {
-      let element: HTMLElement | null = null;
 
-      if (entry.shadowDom) {
-        element = queryWithShadowDom(entry.selectors);
-      } else {
-        element = queryByChain(document, entry.selectors);
-      }
+    renderDebugSummary(overlayRoot, snapshot);
+    debugModeEnabled = true;
+    attachDebugOverlayListeners();
+    scheduleDebugOverlayLayout();
 
-      if (element) {
-        applyDebugOverlayFound(element, fieldPath);
-        results.push({ fieldPath, found: true });
-      } else {
-        applyDebugOverlayMissing(fieldPath);
-        results.push({ fieldPath, found: false });
-      }
-    }
-  }
-
-  // Log summary
-  const found = results.filter((r) => r.found).length;
-  const missing = results.filter((r) => !r.found).length;
-  logger.info(
-    `[Debug Mode] ${platform}: ${found} selectors found, ${missing} selectors missing`
-  );
-
-  if (missing > 0) {
-    const missingPaths = results
-      .filter((r) => !r.found)
-      .map((r) => r.fieldPath);
-    logger.warn('[Debug Mode] Missing selectors:', missingPaths.join(', '));
+    logger.info(
+      `[Debug Mode] ${platform}: ${snapshot.extractedFields} extracted, ${snapshot.missingWithSelector} selector-only, ${snapshot.missingWithoutSelector} missing`,
+    );
+  } catch (err) {
+    logger.error('Failed to enable debug mode:', err);
+    disableSelectorDebugMode();
   }
 }
 
 /**
- * Apply a green debug overlay to a found element.
- *
- * Adds a green outline border and a floating label above the element
- * showing the field path.
+ * Create a floating debug overlay entry for a field.
  */
-function applyDebugOverlayFound(element: HTMLElement, fieldPath: string): void {
-  // Add green outline to the element
-  element.style.outline = '3px solid #16A34A';
-  element.style.outlineOffset = '2px';
-  element.setAttribute(DEBUG_OUTLINE_ATTR, 'true');
+function createDebugOverlayEntry(
+  root: HTMLElement,
+  element: HTMLElement,
+  fieldPath: string,
+  valuePreview: string,
+  status: DebugOverlayStatus,
+): DebugOverlayEntry {
+  const box = document.createElement('div');
+  box.className = DEBUG_OVERLAY_CLASS;
+  box.style.cssText = [
+    'position: fixed',
+    'z-index: 2147483647',
+    'pointer-events: none',
+    'border-radius: 8px',
+    'box-sizing: border-box',
+    'transition: opacity 120ms ease-out',
+  ].join('; ');
 
-  // Create a floating label
   const label = document.createElement('div');
   label.className = DEBUG_OVERLAY_CLASS;
-  label.textContent = fieldPath;
+  label.textContent =
+    status === 'extracted'
+      ? `${fieldPath} = ${valuePreview}`
+      : `${fieldPath} (selector only)`;
   label.style.cssText = [
-    'position: absolute',
-    'background: #16A34A',
-    'color: white',
-    'padding: 2px 8px',
+    'position: fixed',
+    'z-index: 2147483647',
+    'pointer-events: none',
+    'padding: 4px 8px',
     'font-size: 11px',
     'font-weight: 600',
     'font-family: "SF Mono", "Menlo", "Monaco", monospace',
-    'border-radius: 3px',
-    'z-index: 2147483647',
-    'pointer-events: none',
+    'border-radius: 6px',
     'white-space: nowrap',
-    'box-shadow: 0 1px 3px rgba(0,0,0,0.2)',
+    'max-width: min(60vw, 520px)',
+    'overflow: hidden',
+    'text-overflow: ellipsis',
+    'box-shadow: 0 10px 25px rgba(15, 23, 42, 0.18)',
   ].join('; ');
 
-  // Position the label above the element
-  const rect = element.getBoundingClientRect();
-  label.style.left = `${window.scrollX + rect.left}px`;
-  label.style.top = `${window.scrollY + rect.top - 22}px`;
+  applyDebugOverlayTheme(box, label, status);
+  root.appendChild(box);
+  root.appendChild(label);
 
-  document.body.appendChild(label);
+  return {
+    target: element,
+    box,
+    label,
+    fieldPath,
+    valuePreview,
+    status,
+  };
 }
 
 /**
- * Apply a red debug overlay for a missing element.
- *
- * Creates a floating red banner at the top of the page listing the
- * field path that could not be found.
+ * Theme a debug overlay entry based on its extraction state.
  */
-function applyDebugOverlayMissing(fieldPath: string): void {
-  const banner = document.createElement('div');
-  banner.className = DEBUG_OVERLAY_CLASS;
-  banner.textContent = `MISSING: ${fieldPath}`;
-  banner.style.cssText = [
-    'position: relative',
-    'background: #DC2626',
-    'color: white',
-    'padding: 4px 10px',
-    'font-size: 11px',
-    'font-weight: 600',
-    'font-family: "SF Mono", "Menlo", "Monaco", monospace',
-    'border-bottom: 1px solid #B91C1C',
+function applyDebugOverlayTheme(
+  box: HTMLDivElement,
+  label: HTMLDivElement,
+  status: DebugOverlayStatus,
+): void {
+  if (status === 'extracted') {
+    box.style.border = '3px solid #16A34A';
+    box.style.background = 'rgba(34, 197, 94, 0.10)';
+    label.style.background = '#16A34A';
+    label.style.color = '#FFFFFF';
+  } else {
+    box.style.border = '3px dashed #D97706';
+    box.style.background = 'rgba(245, 158, 11, 0.12)';
+    label.style.background = '#D97706';
+    label.style.color = '#111827';
+  }
+}
+
+/**
+ * Create the fixed overlay root that holds highlight boxes and labels.
+ */
+function createDebugOverlayRoot(): HTMLElement {
+  let root = document.getElementById(DEBUG_OVERLAY_ROOT_ID);
+  if (root) {
+    root.remove();
+  }
+
+  root = document.createElement('div');
+  root.id = DEBUG_OVERLAY_ROOT_ID;
+  root.className = DEBUG_OVERLAY_CLASS;
+  root.style.cssText = [
+    'position: fixed',
+    'inset: 0',
     'z-index: 2147483647',
     'pointer-events: none',
   ].join('; ');
+  document.body.appendChild(root);
+  return root;
+}
 
-  // Get or create the debug banner container
-  let container = document.getElementById('gov-debug-missing-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'gov-debug-missing-container';
-    container.style.cssText = [
-      'position: fixed',
-      'top: 0',
-      'left: 0',
-      'right: 0',
-      'z-index: 2147483647',
-      'max-height: 200px',
-      'overflow-y: auto',
-      'pointer-events: none',
-    ].join('; ');
-    container.className = DEBUG_OVERLAY_CLASS;
-    document.body.appendChild(container);
+/**
+ * Resolve a DOM element for a debug-highlighted field path without recording
+ * selector telemetry.
+ */
+function resolveDebugFieldElement(
+  platform: Platform,
+  fieldPath: string,
+): HTMLElement | null {
+  if (platform === Platform.META) {
+    return peekFieldElement(fieldPath);
   }
 
-  container.appendChild(banner);
+  const entry = GOOGLE_FIELD_SELECTORS[fieldPath];
+  if (!entry) {
+    return null;
+  }
+
+  return entry.shadowDom
+    ? queryWithShadowDom(entry.selectors)
+    : queryByChain(document, entry.selectors);
+}
+
+/**
+ * Render the summary HUD with extracted, selector-only, and missing counts.
+ */
+function renderDebugSummary(
+  root: HTMLElement,
+  snapshot: ReturnType<typeof buildExtractionSnapshot>,
+): void {
+  const summary = document.createElement('div');
+  summary.id = DEBUG_SUMMARY_ID;
+  summary.className = DEBUG_OVERLAY_CLASS;
+  summary.style.cssText = [
+    'position: fixed',
+    'top: 16px',
+    'right: 16px',
+    'width: min(360px, calc(100vw - 32px))',
+    'background: rgba(15, 23, 42, 0.92)',
+    'color: #F8FAFC',
+    'border-radius: 14px',
+    'padding: 14px 16px',
+    'box-shadow: 0 16px 38px rgba(15, 23, 42, 0.35)',
+    'font-family: Inter, system-ui, sans-serif',
+    'pointer-events: none',
+  ].join('; ');
+
+  const missingFields = snapshot.fields
+    .filter((field) => !field.hasValue && field.selectorFound === false)
+    .slice(0, 8)
+    .map((field) => field.fieldPath);
+
+  const selectorOnlyFields = snapshot.fields
+    .filter((field) => !field.hasValue && field.selectorFound === true)
+    .slice(0, 5)
+    .map((field) => field.fieldPath);
+
+  summary.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.01em;">Extraction Highlights</div>
+      <div style="font-size:11px;opacity:0.78;">${snapshot.platform.toUpperCase()}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px;">
+      <div style="background:rgba(34,197,94,0.16);border:1px solid rgba(34,197,94,0.35);border-radius:10px;padding:8px;">
+        <div style="font-size:18px;font-weight:700;color:#86EFAC;">${snapshot.extractedFields}</div>
+        <div style="font-size:11px;opacity:0.82;">Extracted</div>
+      </div>
+      <div style="background:rgba(245,158,11,0.16);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:8px;">
+        <div style="font-size:18px;font-weight:700;color:#FCD34D;">${snapshot.missingWithSelector}</div>
+        <div style="font-size:11px;opacity:0.82;">Selector Only</div>
+      </div>
+      <div style="background:rgba(239,68,68,0.16);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:8px;">
+        <div style="font-size:18px;font-weight:700;color:#FCA5A5;">${snapshot.missingWithoutSelector}</div>
+        <div style="font-size:11px;opacity:0.82;">Missing</div>
+      </div>
+    </div>
+    ${
+      selectorOnlyFields.length > 0
+        ? `<div style="margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#FCD34D;margin-bottom:6px;">Selector only</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">${selectorOnlyFields
+              .map(
+                (fieldPath) =>
+                  `<span style="background:rgba(245,158,11,0.18);border:1px solid rgba(245,158,11,0.28);border-radius:999px;padding:3px 8px;font-size:11px;">${escapeHtml(fieldPath)}</span>`,
+              )
+              .join('')}</div>
+          </div>`
+        : ''
+    }
+    ${
+      missingFields.length > 0
+        ? `<div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#FCA5A5;margin-bottom:6px;">Missing fields</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">${missingFields
+              .map(
+                (fieldPath) =>
+                  `<span style="background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.28);border-radius:999px;padding:3px 8px;font-size:11px;">${escapeHtml(fieldPath)}</span>`,
+              )
+              .join('')}</div>
+          </div>`
+        : '<div style="font-size:11px;opacity:0.76;">No selector misses in the current viewport/state.</div>'
+    }
+  `;
+
+  root.appendChild(summary);
+}
+
+/**
+ * Update overlay boxes and labels to follow their live DOM targets.
+ */
+function layoutDebugOverlays(): void {
+  debugOverlayLayoutFrame = null;
+
+  for (const entry of debugOverlayEntries) {
+    const rect = entry.target.getBoundingClientRect();
+    const isVisible =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > 0 &&
+      rect.top < window.innerHeight &&
+      rect.right > 0 &&
+      rect.left < window.innerWidth;
+
+    if (!isVisible) {
+      entry.box.style.opacity = '0';
+      entry.label.style.opacity = '0';
+      continue;
+    }
+
+    entry.box.style.opacity = '1';
+    entry.label.style.opacity = '1';
+    entry.box.style.left = `${Math.max(0, rect.left)}px`;
+    entry.box.style.top = `${Math.max(0, rect.top)}px`;
+    entry.box.style.width = `${Math.max(8, rect.width)}px`;
+    entry.box.style.height = `${Math.max(8, rect.height)}px`;
+
+    const labelWidth = Math.min(420, Math.max(180, entry.label.offsetWidth || 220));
+    const labelLeft = Math.min(
+      Math.max(8, rect.left),
+      Math.max(8, window.innerWidth - labelWidth - 8),
+    );
+    const labelTop =
+      rect.top >= 34
+        ? rect.top - 30
+        : Math.min(window.innerHeight - 34, rect.bottom + 8);
+
+    entry.label.style.left = `${labelLeft}px`;
+    entry.label.style.top = `${Math.max(8, labelTop)}px`;
+  }
+}
+
+/**
+ * Schedule a layout pass for the live debug overlays.
+ */
+function scheduleDebugOverlayLayout(): void {
+  if (!debugModeEnabled) {
+    return;
+  }
+
+  if (debugOverlayLayoutFrame !== null) {
+    cancelAnimationFrame(debugOverlayLayoutFrame);
+  }
+
+  debugOverlayLayoutFrame = window.requestAnimationFrame(() => {
+    layoutDebugOverlays();
+  });
+}
+
+/**
+ * Attach listeners so overlay boxes follow scrolling and DOM movement.
+ */
+function attachDebugOverlayListeners(): void {
+  window.addEventListener('scroll', scheduleDebugOverlayLayout, true);
+  window.addEventListener('resize', scheduleDebugOverlayLayout);
+
+  debugOverlayMutationObserver = new MutationObserver(() => {
+    scheduleDebugOverlayLayout();
+  });
+  debugOverlayMutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+  });
 }
 
 /**
  * Disable Selector Debug Mode.
  *
- * Removes all debug overlays (green outlines, labels, red banners).
+ * Removes all debug overlays and listeners.
  */
 function disableSelectorDebugMode(): void {
-  // Remove all debug overlay elements
+  debugModeEnabled = false;
+
+  if (debugOverlayLayoutFrame !== null) {
+    cancelAnimationFrame(debugOverlayLayoutFrame);
+    debugOverlayLayoutFrame = null;
+  }
+
+  window.removeEventListener('scroll', scheduleDebugOverlayLayout, true);
+  window.removeEventListener('resize', scheduleDebugOverlayLayout);
+
+  if (debugOverlayMutationObserver) {
+    debugOverlayMutationObserver.disconnect();
+    debugOverlayMutationObserver = null;
+  }
+
+  debugOverlayEntries = [];
+
   const overlays = document.querySelectorAll(`.${DEBUG_OVERLAY_CLASS}`);
   for (const el of overlays) {
     el.remove();
   }
 
-  // Remove the missing container
-  const container = document.getElementById('gov-debug-missing-container');
-  if (container) {
-    container.remove();
-  }
+  document.getElementById(DEBUG_OVERLAY_ROOT_ID)?.remove();
+  document.getElementById(DEBUG_SUMMARY_ID)?.remove();
+}
 
-  // Remove green outlines from elements
-  const outlinedElements = document.querySelectorAll<HTMLElement>(
-    `[${DEBUG_OUTLINE_ATTR}]`
-  );
-  for (const el of outlinedElements) {
-    el.style.outline = '';
-    el.style.outlineOffset = '';
-    el.removeAttribute(DEBUG_OUTLINE_ATTR);
-  }
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 // Export for testing

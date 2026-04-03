@@ -19,6 +19,26 @@ const REFRESH_ICON_SVG = `
     <path d="M8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.38A7.001 7.001 0 0115 8a.75.75 0 01-1.5 0A5.5 5.5 0 008 2.5zM2.5 8a.75.75 0 00-1.5 0 7.001 7.001 0 0012.193 4.693l1.38 1.38a.25.25 0 00.427-.177V10.25a.25.25 0 00-.25-.25h-3.646a.25.25 0 00-.177.427l1.204 1.204A5.487 5.487 0 018 13.5 5.5 5.5 0 012.5 8z"/>
   </svg>`;
 
+interface ExtractionSnapshotField {
+  fieldPath: string;
+  hasValue: boolean;
+  selectorConfigured: boolean;
+  selectorFound: boolean | null;
+  valuePreview: string;
+  valueType: 'null' | 'string' | 'number' | 'boolean' | 'array' | 'object';
+}
+
+interface ExtractionSnapshot {
+  platform: string;
+  capturedAt: string;
+  totalFields: number;
+  extractedFields: number;
+  selectorHits: number;
+  missingWithSelector: number;
+  missingWithoutSelector: number;
+  fields: ExtractionSnapshotField[];
+}
+
 // ─── Initialization ──────────────────────────────────────────────────────────
 
 /**
@@ -262,6 +282,10 @@ function setupMainListeners(): void {
   const debugBtn = document.getElementById('btn-debug-mode');
   debugBtn?.addEventListener('click', handleToggleDebugMode);
 
+  // Live extraction snapshot button
+  const snapshotBtn = document.getElementById('btn-capture-snapshot');
+  snapshotBtn?.addEventListener('click', handleCaptureSnapshot);
+
   // Selector Health toggle
   const shToggle = document.getElementById('selector-health-toggle');
   shToggle?.addEventListener('click', toggleSelectorHealth);
@@ -439,6 +463,49 @@ async function handleToggleDebugMode(): Promise<void> {
   }
 }
 
+/**
+ * Capture a live field extraction snapshot from the active content script.
+ *
+ * This helps diagnose the exact Meta mismatch category:
+ * selector drift vs extraction/normalization drift.
+ */
+async function handleCaptureSnapshot(): Promise<void> {
+  const snapshotBtn = document.getElementById('btn-capture-snapshot');
+  if (!snapshotBtn) return;
+
+  snapshotBtn.setAttribute('disabled', 'true');
+  snapshotBtn.textContent = 'Capturing...';
+
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+
+    if (!tab?.id) {
+      showFeedback('No active tab available.', 'error');
+      return;
+    }
+
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: 'captureExtractionSnapshot',
+    }) as { success: boolean; snapshot?: ExtractionSnapshot; error?: string };
+
+    if (!response.success || !response.snapshot) {
+      showFeedback(response.error ?? 'Snapshot capture failed.', 'error');
+      return;
+    }
+
+    renderExtractionSnapshot(response.snapshot);
+    showFeedback('Live extraction snapshot captured.', 'success');
+  } catch {
+    showFeedback('No supported Meta tab is active.', 'error');
+  } finally {
+    snapshotBtn.removeAttribute('disabled');
+    snapshotBtn.textContent = 'Capture Live Snapshot';
+  }
+}
+
 // ─── Selector Health ─────────────────────────────────────────────────────────
 
 /**
@@ -450,9 +517,19 @@ async function loadSelectorHealth(): Promise<void> {
 
   try {
     // Import telemetry functions dynamically
-    const { getFieldExtractionStats, getSSEHealthMetrics, getComplianceEventStats } = await import(
-      '../utils/telemetry.js'
-    );
+    const { getFieldExtractionStats, getSSEHealthMetrics, getComplianceEventStats } =
+      await import('../utils/telemetry.js');
+
+    const selectorHealth = await chrome.runtime.sendMessage({
+      type: 'getSelectorHealth',
+    }) as {
+      totalLookups: number;
+      successCount: number;
+      failureCount: number;
+      successRate: number;
+      failingFields: Array<{ fieldPath: string; platform: string; failureCount: number }>;
+      recentFailures: Array<{ selector: string; platform: string; fieldPath: string; timestamp: string }>;
+    };
 
     // Get telemetry data
     const fieldStats = await getFieldExtractionStats();
@@ -462,20 +539,15 @@ async function loadSelectorHealth(): Promise<void> {
     // Show the section (even if no data yet)
     container.style.display = 'block';
 
-    // Calculate success rate (excluding failed extractions)
-    const successRate = fieldStats.total > 0
-      ? ((fieldStats.total - (fieldStats.byStrategy.failed?.count || 0)) / fieldStats.total * 100).toFixed(1)
-      : '0.0';
-
     // Update stats
     const successRateEl = document.getElementById('sh-success-rate');
     const totalEl = document.getElementById('sh-total');
     const failuresEl = document.getElementById('sh-failures');
 
     if (successRateEl) {
-      successRateEl.textContent = `${successRate}%`;
+      successRateEl.textContent = `${selectorHealth.successRate}%`;
       successRateEl.className = 'selector-health__stat-value';
-      const rate = parseFloat(successRate);
+      const rate = selectorHealth.successRate;
       if (rate >= 95) {
         successRateEl.classList.add('selector-health__stat-value--good');
       } else if (rate >= 80) {
@@ -486,11 +558,11 @@ async function loadSelectorHealth(): Promise<void> {
     }
 
     if (totalEl) {
-      totalEl.textContent = String(fieldStats.total);
+      totalEl.textContent = String(selectorHealth.totalLookups);
     }
 
     if (failuresEl) {
-      const failureCount = fieldStats.byStrategy.failed?.count || 0;
+      const failureCount = selectorHealth.failureCount;
       failuresEl.textContent = String(failureCount);
       failuresEl.className = 'selector-health__stat-value';
       if (failureCount === 0) {
@@ -511,18 +583,37 @@ async function loadSelectorHealth(): Promise<void> {
         }))
         .sort((a, b) => b.count - a.count);
 
+      const failingFields = selectorHealth.failingFields.slice(0, 5);
+      const recentFailures = selectorHealth.recentFailures.slice(0, 3);
+
       const html = `
         <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; color: #6B7280; margin-bottom: 6px;">Top Selector Failures</div>
+          ${failingFields.length > 0
+            ? failingFields
+              .map(
+                (entry) => `
+                  <div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px;">
+                    <span style="color: #1F2937; font-family: 'SF Mono', 'Menlo', monospace;">${escapeHtml(entry.fieldPath)}</span>
+                    <span style="color: #DC2626;">${entry.failureCount}</span>
+                  </div>`
+              )
+              .join('')
+            : '<div style="font-size: 11px; color: #6B7280;">No selector failures captured yet.</div>'}
+        </div>
+        <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; color: #6B7280; margin-bottom: 6px;">Field Extraction Strategy</div>
-          ${strategyBreakdown
-            .map(
-              (s) => `
-                <div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px;">
-                  <span style="color: #1F2937; text-transform: capitalize;">${escapeHtml(s.strategy)}</span>
-                  <span style="color: #6B7280;">${s.count} (${s.percentage}%)</span>
-                </div>`
-            )
-            .join('')}
+          ${strategyBreakdown.length > 0
+            ? strategyBreakdown
+              .map(
+                (s) => `
+                  <div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px;">
+                    <span style="color: #1F2937; text-transform: capitalize;">${escapeHtml(s.strategy)}</span>
+                    <span style="color: #6B7280;">${s.count} (${s.percentage}%)</span>
+                  </div>`
+              )
+              .join('')
+            : '<div style="font-size: 11px; color: #6B7280;">No extraction telemetry captured yet.</div>'}
         </div>
         <div style="margin-bottom: 12px;">
           <div style="font-size: 11px; font-weight: 600; color: #6B7280; margin-bottom: 6px;">SSE Connection</div>
@@ -550,6 +641,20 @@ async function loadSelectorHealth(): Promise<void> {
             <span style="color: #6B7280;">${complianceStats.total} / ${complianceStats.successCount} / ${complianceStats.failureCount}</span>
           </div>
         </div>
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; color: #6B7280; margin-bottom: 6px;">Recent Selector Misses</div>
+          ${recentFailures.length > 0
+            ? recentFailures
+              .map(
+                (entry) => `
+                  <div style="padding: 3px 0; font-size: 10px; color: #6B7280;">
+                    <div style="color: #1F2937; font-family: 'SF Mono', 'Menlo', monospace;">${escapeHtml(entry.fieldPath)}</div>
+                    <div>${escapeHtml(entry.selector)}</div>
+                  </div>`
+              )
+              .join('')
+            : '<div style="font-size: 11px; color: #6B7280;">No selector miss samples yet.</div>'}
+        </div>
         <div style="font-size: 10px; color: #9CA3AF; margin-top: 8px;">
           Last 24 hours • Avg extraction: ${fieldStats.avgDurationMs.toFixed(0)}ms
         </div>
@@ -561,6 +666,104 @@ async function loadSelectorHealth(): Promise<void> {
     // Silently fail -- telemetry is non-critical
     console.error('Failed to load selector health:', err);
   }
+}
+
+/**
+ * Render a live extraction snapshot captured from the active tab.
+ */
+function renderExtractionSnapshot(snapshot: ExtractionSnapshot): void {
+  const container = document.getElementById('extraction-snapshot');
+  const summaryEl = document.getElementById('snapshot-summary');
+  const mismatchEl = document.getElementById('snapshot-mismatches');
+  const valuesEl = document.getElementById('snapshot-values');
+  const timestampEl = document.getElementById('snapshot-timestamp');
+
+  if (!container || !summaryEl || !mismatchEl || !valuesEl || !timestampEl) {
+    return;
+  }
+
+  container.style.display = 'block';
+  timestampEl.textContent = new Date(snapshot.capturedAt).toLocaleTimeString();
+
+  summaryEl.innerHTML = `
+    <div class="snapshot-panel__stat">
+      <span class="snapshot-panel__stat-value">${snapshot.extractedFields}/${snapshot.totalFields}</span>
+      <span class="snapshot-panel__stat-label">Extracted</span>
+    </div>
+    <div class="snapshot-panel__stat">
+      <span class="snapshot-panel__stat-value">${snapshot.selectorHits}</span>
+      <span class="snapshot-panel__stat-label">Selector Hits</span>
+    </div>
+    <div class="snapshot-panel__stat">
+      <span class="snapshot-panel__stat-value">${snapshot.missingWithSelector}</span>
+      <span class="snapshot-panel__stat-label">Getter Gaps</span>
+    </div>
+    <div class="snapshot-panel__stat">
+      <span class="snapshot-panel__stat-value">${snapshot.missingWithoutSelector}</span>
+      <span class="snapshot-panel__stat-label">Selector Gaps</span>
+    </div>
+  `;
+
+  const selectorOnly = snapshot.fields
+    .filter((field) => !field.hasValue && field.selectorFound === true)
+    .slice(0, 6);
+  const selectorMissing = snapshot.fields
+    .filter((field) => !field.hasValue && field.selectorFound === false)
+    .slice(0, 6);
+  const extractedValues = snapshot.fields
+    .filter((field) => field.hasValue)
+    .slice(0, 8);
+
+  mismatchEl.innerHTML = [
+    renderSnapshotGroup(
+      'Selector matched, value missing',
+      selectorOnly.map((field) => ({
+        label: field.fieldPath,
+        meta: 'Check getter or normalization',
+      })),
+      'No getter-side gaps in this capture.',
+    ),
+    renderSnapshotGroup(
+      'Selector missing',
+      selectorMissing.map((field) => ({
+        label: field.fieldPath,
+        meta: 'Check selector coverage',
+      })),
+      'No selector gaps in this capture.',
+    ),
+  ].join('');
+
+  valuesEl.innerHTML = renderSnapshotGroup(
+    `${snapshot.platform} extracted values`,
+    extractedValues.map((field) => ({
+      label: field.fieldPath,
+      meta: `${field.valueType} • ${field.valuePreview}`,
+    })),
+    'No field values were extracted in this capture.',
+  );
+}
+
+function renderSnapshotGroup(
+  title: string,
+  entries: Array<{ label: string; meta: string }>,
+  emptyState: string,
+): string {
+  return `
+    <div class="snapshot-panel__group">
+      <div class="snapshot-panel__group-title">${escapeHtml(title)}</div>
+      ${entries.length > 0
+        ? entries
+          .map(
+            (entry) => `
+              <div class="snapshot-panel__item">
+                <div class="snapshot-panel__item-label">${escapeHtml(entry.label)}</div>
+                <div class="snapshot-panel__item-meta">${escapeHtml(entry.meta)}</div>
+              </div>`
+          )
+          .join('')
+        : `<div class="snapshot-panel__empty">${escapeHtml(emptyState)}</div>`}
+    </div>
+  `;
 }
 
 /**
@@ -583,7 +786,10 @@ function toggleSelectorHealth(): void {
 async function clearSelectorTelemetry(): Promise<void> {
   try {
     const { clearAllTelemetry } = await import('../utils/telemetry.js');
-    await clearAllTelemetry();
+    await Promise.all([
+      clearAllTelemetry(),
+      chrome.runtime.sendMessage({ type: 'clearSelectorTelemetry' }),
+    ]);
     await loadSelectorHealth();
     showFeedback('Telemetry data cleared.', 'success');
   } catch (err) {

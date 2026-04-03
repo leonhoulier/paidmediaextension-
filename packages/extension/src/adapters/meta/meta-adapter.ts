@@ -411,8 +411,8 @@ export class MetaAdapter implements PlatformAdapter {
     // Entity level: URL param -> DOM detection -> URL path inference -> default
     const inferredEntityLevel =
       entityLevel ??
+      inferEntityLevelFromUrl(parsedUrl) ??
       detectEntityLevelFromDOM() ??
-      inferEntityLevelFromUrl(url) ??
       EntityLevel.CAMPAIGN;
 
     this.currentEntityLevel = inferredEntityLevel;
@@ -446,8 +446,11 @@ export class MetaAdapter implements PlatformAdapter {
 
     this.extractionInProgress = true;
     try {
+      const context = this.detectContext();
+      const activeEntityLevel = context?.entityLevel ?? this.currentEntityLevel;
+      this.currentEntityLevel = activeEntityLevel;
       console.log('[EXTRACTION] 🔄 Starting field extraction...');
-      const values = await extractAllFieldValues();
+      const values = await extractAllFieldValues(activeEntityLevel);
       console.log(`[EXTRACTION] ✅ Extracted ${Object.keys(values).length} fields`);
       this.fieldValues = { ...values };
       this.lastExtractionTimestamp = Date.now();
@@ -781,10 +784,13 @@ export class MetaAdapter implements PlatformAdapter {
       console.log(`[VALIDATION] 📊 Rule results: ${passedRules.length} passed, ${failedRules.length} failed`);
 
       failedRules.forEach(result => {
-        console.log(`[VALIDATION] ❌ Failed: ${result.rule.name} (${result.rule.enforcement})`, {
-          reason: result.reason,
-          fieldPath: result.rule.condition?.field,
-          actualValue: result.actualValue
+        const rule = this.rules.find((candidate) => candidate.id === result.ruleId);
+        console.log(`[VALIDATION] ❌ Failed: ${rule?.name ?? result.ruleName}`, {
+          enforcement: rule?.enforcement ?? result.enforcement,
+          fieldPath: rule?.condition?.field,
+          status: result.status,
+          actualValue: result.fieldValue,
+          expectedValue: result.expectedValue,
         });
       });
 
@@ -924,7 +930,7 @@ export class MetaAdapter implements PlatformAdapter {
     if (blockingViolations.length > 0) {
       console.log('[UI-UPDATE] ⏳ Blocking violations present (blocker will show when user clicks Publish)');
       blockingViolations.forEach(v => {
-        console.log(`[UI-UPDATE]    - ${v.rule.name}`);
+        console.log(`[UI-UPDATE]    - ${v.ruleName}`);
       });
     } else if (this.creationBlocker) {
       console.log('[UI-UPDATE] ✅ No blocking violations - hiding creation blocker');
@@ -1571,9 +1577,9 @@ export class MetaAdapter implements PlatformAdapter {
 
     const fieldPath = rule.condition.field ?? '';
     const ruleType = rule.ruleType;
-    console.log(`[SCROLL-TO-FIELD] 📍 Looking for field: ${fieldPath}, ruleType: ${ruleType}, entityLevel: ${this.entityLevel}`);
+    console.log(`[SCROLL-TO-FIELD] 📍 Looking for field: ${fieldPath}, ruleType: ${ruleType}, entityLevel: ${this.currentEntityLevel}`);
 
-    const injectionPoint = getInjectionPointForField(fieldPath, ruleType, this.entityLevel);
+    const injectionPoint = getInjectionPointForField(ruleType, fieldPath);
     console.log(`[SCROLL-TO-FIELD] 🔍 Injection point result:`, {
       found: !!injectionPoint?.element,
       element: injectionPoint?.element,
@@ -1652,17 +1658,45 @@ export class MetaAdapter implements PlatformAdapter {
  * @param url - The full URL string
  * @returns Inferred EntityLevel or null
  */
-function inferEntityLevelFromUrl(url: string): EntityLevel | null {
-  const lower = url.toLowerCase();
+function inferEntityLevelFromUrl(url: URL): EntityLevel | null {
+  const pathname = url.pathname.toLowerCase();
+  const params = url.searchParams;
+  const currentStep = params.get('current_step');
 
-  if (lower.includes('/campaigns')) {
-    return EntityLevel.CAMPAIGN;
+  // Strongest signals: explicit editor paths and entity IDs in query params.
+  if (
+    params.has('selected_ad_ids') ||
+    pathname.includes('/ads/edit') ||
+    pathname.includes('/ads/create')
+  ) {
+    return EntityLevel.AD;
   }
-  if (lower.includes('/adsets') || lower.includes('/ad_sets') || lower.includes('/adgroups')) {
+
+  if (
+    params.has('selected_adset_ids') ||
+    pathname.includes('/adsets/edit') ||
+    pathname.includes('/ad_sets/edit') ||
+    pathname.includes('/adgroups/edit') ||
+    pathname.includes('/adsets/create') ||
+    pathname.includes('/ad_sets/create') ||
+    pathname.includes('/adgroups/create')
+  ) {
     return EntityLevel.AD_SET;
   }
-  if (lower.includes('/ads')) {
+
+  // Multi-step creation flows often stay on /campaigns while the step changes.
+  if (currentStep === '2') {
     return EntityLevel.AD;
+  }
+  if (currentStep === '1') {
+    return EntityLevel.AD_SET;
+  }
+  if (currentStep === '0') {
+    return EntityLevel.CAMPAIGN;
+  }
+
+  if (pathname.includes('/campaigns')) {
+    return EntityLevel.CAMPAIGN;
   }
 
   return null;

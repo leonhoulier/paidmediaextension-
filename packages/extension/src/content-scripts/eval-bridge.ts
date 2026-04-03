@@ -622,8 +622,26 @@
       if (el instanceof HTMLSelectElement) {
         return el.options[el.selectedIndex]?.text ?? null;
       }
-      // For custom dropdowns, look for aria-selected
-      const selected = el?.querySelector('[aria-selected="true"]');
+      if (!el) return null;
+
+      const selected =
+        el.matches('[aria-selected="true"], [aria-checked="true"], .selected, [data-selected="true"]')
+          ? el
+          : el.querySelector(
+              '[aria-selected="true"], [aria-checked="true"], input[type="radio"]:checked, .selected, [data-selected="true"]',
+            );
+
+      if (selected instanceof HTMLInputElement) {
+        const labelledBy = selected.getAttribute('aria-labelledby');
+        if (labelledBy) {
+          const labelEl = document.getElementById(labelledBy);
+          if (labelEl?.textContent?.trim()) {
+            return labelEl.textContent.trim();
+          }
+        }
+        return selected.value || null;
+      }
+
       return selected?.textContent?.trim() ?? null;
     },
   };

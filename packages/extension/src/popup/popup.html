@@ -426,6 +426,108 @@
     .selector-health__clear:hover {
       color: #1F2937;
     }
+
+    /* ── Live extraction snapshot ─────────────────── */
+    .snapshot-panel {
+      display: none;
+      padding: 10px;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      background: #F9FAFB;
+    }
+
+    .snapshot-panel__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .snapshot-panel__title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .snapshot-panel__timestamp {
+      font-size: 10px;
+      color: #9CA3AF;
+    }
+
+    .snapshot-panel__stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .snapshot-panel__stat {
+      padding: 8px;
+      border-radius: 6px;
+      background: white;
+      border: 1px solid #E5E7EB;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .snapshot-panel__stat-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .snapshot-panel__stat-label {
+      font-size: 10px;
+      color: #6B7280;
+      text-transform: uppercase;
+    }
+
+    .snapshot-panel__lists {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .snapshot-panel__group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .snapshot-panel__group-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .snapshot-panel__item {
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: white;
+      border: 1px solid #E5E7EB;
+    }
+
+    .snapshot-panel__item-label {
+      font-size: 11px;
+      color: #111827;
+      font-family: 'SF Mono', 'Menlo', monospace;
+    }
+
+    .snapshot-panel__item-meta {
+      margin-top: 2px;
+      font-size: 10px;
+      color: #6B7280;
+    }
+
+    .snapshot-panel__empty {
+      font-size: 11px;
+      color: #6B7280;
+      padding: 2px 0;
+    }
   </style>
 </head>
 <body>
@@ -536,12 +638,27 @@
         <button class="popup__btn" id="btn-toggle-sidebar">
           Toggle Sidebar
         </button>
+        <button class="popup__btn" id="btn-capture-snapshot">
+          Capture Live Snapshot
+        </button>
         <button class="popup__btn popup__btn--debug" id="btn-debug-mode">
           Selector Debug Mode: OFF
         </button>
         <button class="popup__btn popup__btn--danger" id="btn-unpair">
           Disconnect Extension
         </button>
+      </div>
+
+      <div class="snapshot-panel" id="extraction-snapshot">
+        <div class="snapshot-panel__header">
+          <span class="snapshot-panel__title">Live Extraction Snapshot</span>
+          <span class="snapshot-panel__timestamp" id="snapshot-timestamp">—</span>
+        </div>
+        <div class="snapshot-panel__stats" id="snapshot-summary"></div>
+        <div class="snapshot-panel__lists">
+          <div id="snapshot-mismatches"></div>
+          <div id="snapshot-values"></div>
+        </div>
       </div>
     </div>
 

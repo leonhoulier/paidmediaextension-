@@ -4,6 +4,8 @@
  * Tests individual field getter functions and the remoteEval bridge.
  */
 
+import { jest } from '@jest/globals';
+
 // TextEncoder/TextDecoder polyfill for jsdom
 import { TextEncoder, TextDecoder } from 'util';
 Object.assign(global, { TextEncoder, TextDecoder });
@@ -37,7 +39,9 @@ import {
   isRequireExtractionEnabled,
   setRequireExtractionEnabled,
   getRequireFieldMap,
+  getFieldPathsForEntityLevel,
 } from '../meta-fields.js';
+import { EntityLevel } from '@media-buying-governance/shared';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -486,6 +490,17 @@ describe('getScheduleStartDate()', () => {
     document.body.innerHTML = '<div>No date</div>';
     expect(getScheduleStartDate()).toBeNull();
   });
+
+  it('should ignore non-date React values', () => {
+    const el = document.createElement('div');
+    (el as Record<string, unknown>)['__reactFiber$test123'] = {
+      memoizedProps: { value: true },
+    };
+    el.setAttribute('aria-label', 'Start date');
+    document.body.appendChild(el);
+
+    expect(getScheduleStartDate()).toBeNull();
+  });
 });
 
 describe('getScheduleEndDate()', () => {
@@ -495,6 +510,17 @@ describe('getScheduleEndDate()', () => {
     `;
 
     expect(getScheduleEndDate()).toBe('2026-04-30');
+  });
+
+  it('should ignore non-date React values', () => {
+    const el = document.createElement('div');
+    (el as Record<string, unknown>)['__reactFiber$test123'] = {
+      memoizedProps: { value: false },
+    };
+    el.setAttribute('aria-label', 'End date');
+    document.body.appendChild(el);
+
+    expect(getScheduleEndDate()).toBeNull();
   });
 });
 
@@ -596,6 +622,16 @@ describe('getPageId()', () => {
 
   it('should return null when not found', () => {
     document.body.innerHTML = '<div>No page selector</div>';
+    expect(getPageId()).toBeNull();
+  });
+
+  it('should ignore generic edit labels', () => {
+    document.body.innerHTML = `
+      <div aria-label="Facebook Page">
+        <div aria-selected="true">EditEditEdit</div>
+      </div>
+    `;
+
     expect(getPageId()).toBeNull();
   });
 });
@@ -842,6 +878,20 @@ describe('getDomFieldPaths()', () => {
   });
 });
 
+describe('getFieldPathsForEntityLevel()', () => {
+  it('should return campaign fields only for campaign level', () => {
+    const paths = getFieldPathsForEntityLevel(EntityLevel.CAMPAIGN);
+    expect(paths).toContain('campaign.name');
+    expect(paths).not.toContain('ad_set.name');
+    expect(paths).not.toContain('ad.name');
+  });
+
+  it('should return ad set and ad specific groups separately', () => {
+    expect(getFieldPathsForEntityLevel(EntityLevel.AD_SET)).toContain('ad_set.name');
+    expect(getFieldPathsForEntityLevel(EntityLevel.AD)).toContain('ad.name');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Feature Flag: enable-require-extraction
 // ---------------------------------------------------------------------------
@@ -1032,6 +1082,33 @@ describe('Fallback chain in extractAllFieldValues()', () => {
     expect(values['campaign.budget_value']).toBeNull();
   });
 
+  it('should scope extraction to the active entity level', async () => {
+    document.body.innerHTML = `
+      <input aria-label="Campaign name" value="Campaign Name" />
+      <input aria-label="Ad set name" value="Ad Set Name" />
+      <input aria-label="Ad name" value="Ad Name" />
+    `;
+
+    const values = await extractAllFieldValues(EntityLevel.AD_SET);
+
+    expect(values['campaign.name']).toBeNull();
+    expect(values['ad_set.name']).toBe('Ad Set Name');
+    expect(values['ad.name']).toBeNull();
+  });
+
+  it('should not infer countries from unrelated page text', () => {
+    document.body.innerHTML = `
+      <div>
+        <span>Account Overview</span>
+        <span>France</span>
+        <span>Spain</span>
+        <span>China</span>
+      </div>
+    `;
+
+    expect(getGeoLocationCountries()).toBeNull();
+  });
+
   it('should not throw when getters fail', async () => {
     // Even with a completely empty DOM, should not throw
     document.body.innerHTML = '';
@@ -1060,6 +1137,36 @@ describe('Fallback chain in extractAllFieldValues()', () => {
     // require()-only fields should be present (as null) in the result
     expect('ad.creative.headline' in values).toBe(true);
     expect(values['ad.creative.headline']).toBeNull();
+  });
+
+  it('should normalize remoteEval-selected values for campaign controls', async () => {
+    document.body.innerHTML = '<div></div>';
+    setRequireExtractionEnabled(false);
+
+    const customHandler = ((event: CustomEvent) => {
+      if (!event.detail?.queryId) return;
+      window.postMessage({
+        type: 'evalResult.governance',
+        queryId: event.detail.queryId,
+        results: {
+          'campaign.objective': 'Traffic',
+          'campaign.budget_type': 'Lifetime budget',
+          'campaign.cbo_enabled': true,
+        },
+        errors: {},
+      }, '*');
+    }) as EventListener;
+
+    window.addEventListener('evalQuery.governance', customHandler);
+
+    try {
+      const values = await extractAllFieldValues();
+      expect(values['campaign.objective']).toBe('Traffic');
+      expect(values['campaign.budget_type']).toBe('lifetime');
+      expect(values['campaign.cbo_enabled']).toBe(true);
+    } finally {
+      window.removeEventListener('evalQuery.governance', customHandler);
+    }
   });
 });
 

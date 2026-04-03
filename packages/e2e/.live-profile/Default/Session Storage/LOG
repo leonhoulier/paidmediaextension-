@@ -1,0 +1,4 @@
+2026/04/01-23:16:30.685 1128121 Reusing MANIFEST /Users/leonhoulier/projects/media-buying-governance/packages/e2e/.live-profile/Default/Session Storage/MANIFEST-000001
+2026/04/01-23:16:30.688 1128121 Recovering log #3
+2026/04/01-23:16:30.688 1128121 (ignoring error) /Users/leonhoulier/projects/media-buying-governance/packages/e2e/.live-profile/Default/Session Storage/000003.log: dropping 12501 bytes; Corruption: checksum mismatch
+2026/04/01-23:16:30.689 1128121 Reusing old log /Users/leonhoulier/projects/media-buying-governance/packages/e2e/.live-profile/Default/Session Storage/000003.log 

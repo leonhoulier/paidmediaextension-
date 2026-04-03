@@ -40,6 +40,21 @@ export {
   destroyRemoteEvalBatcher,
 } from './meta-fields.js';
 
+// Field registry metadata
+export {
+  getMetaFieldSpec,
+  getMetaFieldSpecs,
+  getMetaFieldPaths,
+  getMetaFieldPathsForEntityLevel,
+  getMetaFieldPathsForTier,
+  getMetaFieldTier,
+  getMetaDomFieldPaths,
+  getMetaDomAliasMap,
+  getMetaRequireFieldMap,
+  getMetaRemoteEvalConfig,
+  getMetaRemoteEvalConfigMap,
+} from './meta-field-specs.js';
+
 // Selectors and injection points
 export {
   findElement,
@@ -53,6 +68,12 @@ export {
 } from './meta-selectors.js';
 
 // Types
+export type {
+  MetaFieldSpec,
+  MetaFieldTier,
+  MetaRequireFieldMapping,
+  MetaRemoteEvalConfig,
+} from './meta-field-specs.js';
 export type {
   SelectorMethod,
   SelectorStrategy,

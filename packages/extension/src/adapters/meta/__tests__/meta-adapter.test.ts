@@ -5,6 +5,7 @@
  * Uses Jest with mock DOM structures to simulate Meta Ads Manager pages.
  */
 
+import { jest } from '@jest/globals';
 import {
   EntityLevel,
   ExtensionView,
@@ -284,6 +285,34 @@ describe('MetaAdapter', () => {
       const context = adapter.detectContext();
       expect(context).not.toBeNull();
       expect(context!.entityLevel).toBe(EntityLevel.CAMPAIGN);
+    });
+
+    it('should infer ad set edit context from standalone editor URL', () => {
+      setLocation(
+        'https://adsmanager.facebook.com/adsmanager/manage/adsets/edit/standalone?act=123456&selected_campaign_ids=111&selected_adset_ids=222',
+      );
+      const context = adapter.detectContext();
+      expect(context).not.toBeNull();
+      expect(context!.entityLevel).toBe(EntityLevel.AD_SET);
+      expect(context!.view).toBe(ExtensionView.EDIT);
+    });
+
+    it('should infer ad edit context from selected ad ids when tool is absent', () => {
+      setLocation(
+        'https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=123456&selected_campaign_ids=111&selected_adset_ids=222&selected_ad_ids=333',
+      );
+      const context = adapter.detectContext();
+      expect(context).not.toBeNull();
+      expect(context!.entityLevel).toBe(EntityLevel.AD);
+    });
+
+    it('should infer entity level from current_step in multi-step flows', () => {
+      setLocation(
+        'https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=123456&current_step=1',
+      );
+      const context = adapter.detectContext();
+      expect(context).not.toBeNull();
+      expect(context!.entityLevel).toBe(EntityLevel.AD_SET);
     });
 
     it('should return null for completely invalid URLs', () => {

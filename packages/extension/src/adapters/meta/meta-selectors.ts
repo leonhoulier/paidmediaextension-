@@ -779,6 +779,24 @@ export function findFieldElement(fieldPath: string): HTMLElement | null {
 }
 
 /**
+ * Resolve a field selector without recording telemetry.
+ *
+ * This is useful for on-demand diagnostics where we want to inspect
+ * selector coverage without polluting the normal selector health metrics.
+ *
+ * @param fieldPath - The field path (e.g. 'campaign.name')
+ * @returns The matching HTMLElement, or null
+ */
+export function peekFieldElement(fieldPath: string): HTMLElement | null {
+  const config = META_FIELD_SELECTORS.find((c) => c.fieldPath === fieldPath);
+  if (!config) {
+    return null;
+  }
+
+  return findElement(config.strategies);
+}
+
+/**
  * Resolve a single selector strategy to an HTMLElement.
  *
  * @param strategy - The strategy to resolve
