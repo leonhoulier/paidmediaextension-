@@ -42,7 +42,13 @@ export interface ValidationBannerProps {
 const BANNER_STYLES = `
   ${BASE_COMPONENT_STYLES}
 
+  :host {
+    /* Don't let banners block clicks on underlying form fields */
+    pointer-events: none;
+  }
+
   .banner {
+    pointer-events: auto; /* re-enable for the banner itself */
     display: flex;
     align-items: flex-start;
     gap: var(--gov-space-md);

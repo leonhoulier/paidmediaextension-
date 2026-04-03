@@ -155,8 +155,9 @@ export function renderNamingPreview(props: NamingPreviewProps): HTMLElement {
   removeNamingPreview();
 
   // Create Shadow DOM container (inline-flow, not fixed-position overlay)
+  // pointer-events: none on host so it doesn't block clicks on the name input
   const inlineOptions: ShadowContainerOptions = {
-    positionStyle: 'position: static;',
+    positionStyle: 'position: static; pointer-events: none;',
   };
   const { host, shadow } = createShadowContainer('naming-preview', undefined, inlineOptions);
   host.setAttribute('data-gov-component', 'naming-preview');
