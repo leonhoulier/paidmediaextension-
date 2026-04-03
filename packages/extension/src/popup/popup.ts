@@ -222,8 +222,12 @@ async function showMainView(): Promise<void> {
  */
 async function loadStatus(): Promise<void> {
   try {
-    // Get sync status from service worker
-    const status = await chrome.runtime.sendMessage({ type: 'getSyncStatus' }) as {
+    // Get sync status from service worker (with 3s timeout to avoid hanging popup)
+    const statusPromise = chrome.runtime.sendMessage({ type: 'getSyncStatus' });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Service worker timeout')), 3000)
+    );
+    const status = await Promise.race([statusPromise, timeoutPromise]) as {
       orgName: string | null;
       orgId: string | null;
       activeAccountId: string | null;
