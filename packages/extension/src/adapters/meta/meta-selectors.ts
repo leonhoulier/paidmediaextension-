@@ -1,12 +1,17 @@
 /**
- * Meta Ads Manager DOM Selectors
+ * Meta Ads Manager DOM Selectors (2026 rewrite)
  *
  * Central registry of DOM selectors for every Meta Ads Manager field.
  * Each field has multiple selector strategies tried in priority order:
- *   1. aria-label selector (most stable across React re-renders)
- *   2. data-testid selector
- *   3. Text-content matching
- *   4. Heuristic proximity (find input near label containing target text)
+ *   1. placeholder attribute (most reliable for text inputs)
+ *   2. role attribute + section proximity
+ *   3. Section heading proximity (for collapsed targeting fields)
+ *
+ * In 2026 Meta Ads Manager:
+ *   - NO aria-label on text inputs (use placeholder instead)
+ *   - NO data-testid on form fields
+ *   - NO role="radiogroup" (objectives use [role="row"] with input[type="radio"])
+ *   - NO native select (all dropdowns are div[role="combobox"])
  *
  * @module meta-selectors
  */
@@ -73,44 +78,26 @@ export interface FieldSelectorConfig {
  * Complete map of Meta Ads Manager field paths to their selector configs.
  *
  * Field paths follow Appendix B of the specification.
+ * Updated for 2026 Meta Ads Manager DOM (placeholder-first, no aria-label/data-testid on inputs).
  */
 export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
   // ── Campaign Level ──────────────────────────────────────────────────────
 
-  // Campaign Name
-  // Strategy: aria-label is the most stable attribute in Meta's React UI;
-  // it persists across CSS obfuscation and React re-renders.
-  // Fallback 1: data-testid -- Meta sometimes adds testid attributes (not guaranteed in prod).
-  // Fallback 2: Heuristic proximity -- find any <input> within 5 ancestor levels of a
-  //   label/span containing "Campaign name". Most fragile but broadest coverage.
-  // Known limitation: All strategies assume English UI. Non-English locales will
-  //   have translated aria-label text (e.g., "Nom de la campagne" in French).
-  // Risk: LOW -- campaign name is a fundamental field with stable aria-label.
   {
     fieldPath: 'campaign.name',
     strategies: [
       {
-        description: 'Placeholder matching "campaign name" (2026 Meta DOM)',
+        description: 'Placeholder "campaign name" (2026 verified)',
         method: 'placeholder',
         selector: 'input[placeholder*="campaign name" i]',
       },
       {
-        description: 'Placeholder matching "Enter your campaign" (2026 Meta DOM)',
+        description: 'Placeholder "Enter your campaign" (2026 verified)',
         method: 'placeholder',
         selector: 'input[placeholder*="Enter your campaign" i]',
       },
       {
-        description: 'aria-label containing "Campaign name"',
-        method: 'aria-label',
-        selector: 'input[aria-label*="Campaign name"]',
-      },
-      {
-        description: 'data-testid for campaign name',
-        method: 'data-testid',
-        selector: '[data-testid*="campaign-name"] input, [data-testid*="campaign_name"] input',
-      },
-      {
-        description: 'Heuristic: input near "Campaign name" label',
+        description: 'Heuristic: input near "Campaign name" heading',
         method: 'heuristic',
         labelText: 'Campaign name',
         targetTag: 'input',
@@ -119,29 +106,19 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Campaign Objective
-  // Strategy: data-testid is primary because the objective selector is a custom
-  // component (cards or radiogroup) without a simple aria-label.
-  // Fallback 1: role="radiogroup" -- generic but objective cards use this role.
-  //   WARNING: This selector is very broad and may match other radiogroups on the page.
-  // Fallback 2: Text content match on "Objective" span -- finds the section header,
-  //   not the selection container itself. The getter code (getCampaignObjective) then
-  //   looks within for [aria-selected="true"] or [aria-checked="true"].
-  // Known limitation: Meta frequently A/B tests the objective selection UI.
-  //   The layout may change from cards to a list or dropdown without notice.
-  // Risk: MEDIUM -- A/B test variations may change DOM structure.
   {
     fieldPath: 'campaign.objective',
     strategies: [
       {
-        description: 'data-testid for objective selection',
-        method: 'data-testid',
-        selector: '[data-testid*="objective"]',
+        description: 'Checked radio row heading (2026 verified)',
+        method: 'role',
+        selector: '[role="row"]:has(input[type="radio"]:checked)',
       },
       {
-        description: 'role radiogroup for objective cards',
-        method: 'role',
-        selector: '[role="radiogroup"]',
+        description: 'Heuristic: radio near "Campaign objective" heading',
+        method: 'heuristic',
+        labelText: 'Campaign objective',
+        targetTag: '[role="row"]',
       },
       {
         description: 'Text match: "Objective" section header',
@@ -153,142 +130,118 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Campaign Budget Type (Daily / Lifetime)
-  // Strategy: aria-label is primary for the dropdown/combobox container.
-  // Fallback 1: data-testid for budget type section.
-  // Fallback 2: Text content match on "Daily budget" or "Lifetime budget" display text.
-  // Fallback 3: Heuristic -- find a <select> near a "Budget" label.
-  //   WARNING: Strategy 4 targets <select> but Meta uses a custom dropdown (div with
-  //   role="combobox"), not a native <select>. This fallback will likely fail on real UI.
-  // Known limitation: Budget type may be hidden when CBO/Advantage+ is enabled
-  //   (budget is set at campaign level, not ad set level).
-  // Risk: MEDIUM -- custom dropdown, heuristic fallback targets wrong element type.
   {
     fieldPath: 'campaign.budget_type',
     strategies: [
       {
-        description: 'Text match: "Daily budget" or "Lifetime budget" in div (2026 Meta DOM)',
+        description: 'Combobox near "Budget" heading (2026 verified)',
+        method: 'heuristic',
+        labelText: 'Budget',
+        targetTag: '[role="combobox"]',
+      },
+      {
+        description: 'Text match: "Daily budget" or "Lifetime budget"',
         method: 'text-content',
         textMatch: 'Daily budget|Lifetime budget',
         tagName: 'div',
       },
-      {
-        description: 'Heuristic: div near "Budget mode" label (2026 Meta DOM)',
-        method: 'heuristic',
-        labelText: 'Budget mode',
-        targetTag: 'div',
-      },
-      {
-        description: 'aria-checked within radiogroup near Budget text (2026 Meta DOM)',
-        method: 'composite',
-        selector: '[aria-checked="true"]',
-      },
-      {
-        description: 'aria-label containing "Budget type" or "budget" dropdown',
-        method: 'aria-label',
-        selector: '[aria-label*="Budget type"], [aria-label*="budget type"]',
-      },
-      {
-        description: 'data-testid for budget type',
-        method: 'data-testid',
-        selector: '[data-testid*="budget-type"], [data-testid*="budget_type"]',
-      },
-      {
-        description: 'Text match: "Daily" or "Lifetime" in span',
-        method: 'text-content',
-        textMatch: 'Daily budget|Lifetime budget',
-        tagName: 'span',
-      },
-      {
-        description: 'Heuristic: dropdown near "Budget" label',
-        method: 'heuristic',
-        labelText: 'Budget',
-        targetTag: 'select',
-      },
     ],
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Campaign Budget Value (numeric amount)
-  // Strategy: aria-label on input with type="text" constraint.
-  //   WARNING: The type="text" constraint may fail if Meta uses type="number" or
-  //   inputmode="decimal" without type="text". The remoteEval fallback selector
-  //   (input[aria-label*="Budget"]) does NOT have this type constraint -- inconsistency.
-  // Fallback 1: data-testid for budget value wrapper.
-  // Fallback 2: Heuristic -- find any <input> near "Budget" label.
-  //   WARNING: May match the budget TYPE section input instead of the value input.
-  // Container selector resolves to .budget-section or any element with "budget" in class.
-  // Known limitation: Currency formatting (e.g., "$5,000.00") must be stripped by getter.
-  // Risk: MEDIUM-HIGH -- type="text" constraint may not match real DOM.
   {
     fieldPath: 'campaign.budget_value',
     strategies: [
       {
-        description: 'Placeholder matching "enter amount" (2026 Meta DOM)',
+        description: 'Placeholder "enter amount" (2026 verified)',
         method: 'placeholder',
         selector: 'input[placeholder*="enter amount" i]',
       },
       {
-        description: 'Placeholder matching "Please enter amount" (2026 Meta DOM)',
+        description: 'Placeholder "Please enter amount" (2026 verified)',
         method: 'placeholder',
         selector: 'input[placeholder*="Please enter amount" i]',
       },
       {
-        description: 'aria-label containing "Budget" (input type)',
-        method: 'aria-label',
-        selector: 'input[aria-label*="Budget"][type="text"], input[aria-label*="budget"][type="text"]',
-      },
-      {
-        description: 'data-testid for budget value input',
-        method: 'data-testid',
-        selector: '[data-testid*="budget-value"] input, [data-testid*="budget_value"] input',
-      },
-      {
-        description: 'Heuristic: numeric input near "Budget" label',
+        description: 'Heuristic: text input near "Budget" heading',
         method: 'heuristic',
         labelText: 'Budget',
-        targetTag: 'input',
+        targetTag: 'input[type="text"]',
       },
     ],
-    containerSelector: '.budget-section, [class*="budget"]',
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // CBO / Advantage+ Campaign Budget toggle
-  // Strategy: Compound aria-label match requiring BOTH "Advantage" AND "campaign budget"
-  //   in the label. Also matches legacy "Campaign budget optimization" label.
-  // Fallback 1: role="switch" with budget-related aria-label -- more generic.
-  // Fallback 2: data-testid for CBO toggle.
-  // Fallback 3: Heuristic -- find <input> near "Advantage+ campaign budget" text.
-  //   WARNING: The heuristic targets <input> but the toggle is a <div role="switch">,
-  //   not an <input>. This fallback will likely fail.
-  // Known limitation: Meta rebranded "CBO" to "Advantage+ campaign budget". If they
-  //   rebrand again, strategy 1 will break. Strategy 2 (role="switch" + "budget")
-  //   provides some resilience.
-  // Risk: MEDIUM -- branding changes may invalidate aria-label text.
   {
     fieldPath: 'campaign.cbo_enabled',
     strategies: [
       {
-        description: 'aria-label for Advantage+ campaign budget toggle',
-        method: 'aria-label',
-        selector: '[aria-label*="Advantage"][aria-label*="campaign budget"], [aria-label*="Campaign budget optimization"]',
-      },
-      {
-        description: 'role switch for CBO toggle',
-        method: 'role',
-        selector: '[role="switch"][aria-label*="budget"], [role="switch"][aria-label*="Budget"]',
-      },
-      {
-        description: 'data-testid for CBO toggle',
-        method: 'data-testid',
-        selector: '[data-testid*="cbo"], [data-testid*="campaign-budget-optimization"]',
-      },
-      {
-        description: 'Heuristic: toggle near "Advantage+" text',
+        description: 'Switch near "Advantage campaign budget" heading (2026)',
         method: 'heuristic',
-        labelText: 'Advantage+ campaign budget',
-        targetTag: 'input',
+        labelText: 'Advantage campaign budget',
+        targetTag: '[role="switch"]',
+      },
+      {
+        description: 'Switch near "Campaign budget optimization" heading',
+        method: 'heuristic',
+        labelText: 'Campaign budget optimization',
+        targetTag: '[role="switch"]',
+      },
+      {
+        description: 'Switch with budget-related aria-label',
+        method: 'role',
+        selector: '[role="switch"][aria-label*="budget" i]',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'campaign.buying_type',
+    strategies: [
+      {
+        description: 'Combobox near "Campaign details" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Campaign details',
+        targetTag: '[role="combobox"]',
+      },
+      {
+        description: 'Text match: "Auction" or "Reach and frequency"',
+        method: 'text-content',
+        textMatch: 'Auction|Reach and frequency',
+        tagName: 'div',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'campaign.special_ad_categories',
+    strategies: [
+      {
+        description: 'Combobox near "Special Ad Categories" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Special Ad Categories',
+        targetTag: '[role="combobox"]',
+      },
+      {
+        description: 'Combobox with "Declare category" text',
+        method: 'text-content',
+        textMatch: 'Declare category',
+        tagName: 'div',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'campaign.a_b_test',
+    strategies: [
+      {
+        description: 'Switch near "A/B test" heading (2026)',
+        method: 'heuristic',
+        labelText: 'A/B test',
+        targetTag: '[role="switch"]',
       },
     ],
     injectionPosition: InjectionPosition.AFTER,
@@ -296,25 +249,21 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
 
   // ── Ad Set Level ────────────────────────────────────────────────────────
 
-  // Ad Set Name
-  // Strategy: Same pattern as campaign.name -- aria-label primary, data-testid
-  //   fallback, heuristic proximity as last resort.
-  // Risk: LOW -- standard text input.
   {
     fieldPath: 'ad_set.name',
     strategies: [
       {
-        description: 'aria-label containing "Ad set name"',
-        method: 'aria-label',
-        selector: 'input[aria-label*="Ad set name"]',
+        description: 'Placeholder "ad set name" (2026 verified)',
+        method: 'placeholder',
+        selector: 'input[placeholder*="ad set name" i]',
       },
       {
-        description: 'data-testid for ad set name',
-        method: 'data-testid',
-        selector: '[data-testid*="adset-name"] input, [data-testid*="ad_set_name"] input',
+        description: 'Placeholder "Enter your ad set" (2026 verified)',
+        method: 'placeholder',
+        selector: 'input[placeholder*="Enter your ad set" i]',
       },
       {
-        description: 'Heuristic: input near "Ad set name" label',
+        description: 'Heuristic: input near "Ad set name" heading',
         method: 'heuristic',
         labelText: 'Ad set name',
         targetTag: 'input',
@@ -323,32 +272,64 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Geo Locations (targeting)
-  // Strategy: aria-label on the location targeting container section.
-  //   WARNING: [aria-label*="Location"] is very broad -- may match elements unrelated
-  //   to targeting (e.g., a "Location" link in the sidebar).
-  // Fallback 1: data-testid containing "location" or "geo".
-  //   WARNING: Also broad; may match multiple elements.
-  // Fallback 2: Text content match for "Locations" section heading.
-  // Injection is INSIDE the container (not AFTER) for inline validation display.
-  // The getter (getGeoLocations) looks for .chip, .tag, [role="listitem"] elements
-  //   inside the resolved container, then falls back to React Fiber traversal.
-  // Known limitation: Meta's location picker uses an autocomplete search + chip pattern.
-  //   Selected locations appear as removable tags/chips. The exact class names are
-  //   likely obfuscated in production.
-  // Risk: MEDIUM-HIGH -- broad selectors, complex DOM structure.
+  {
+    fieldPath: 'ad_set.conversion_location',
+    strategies: [
+      {
+        description: 'Checked radio label in Conversion section (2026)',
+        method: 'heuristic',
+        labelText: 'Conversion location',
+        targetTag: 'label:has(input[type="radio"]:checked)',
+      },
+      {
+        description: 'Heuristic: radio near "Conversion" heading',
+        method: 'heuristic',
+        labelText: 'Conversion',
+        targetTag: 'input[type="radio"]',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'ad_set.performance_goal',
+    strategies: [
+      {
+        description: 'Combobox near "Performance goal" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Performance goal',
+        targetTag: '[role="combobox"]',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'ad_set.bid_amount',
+    strategies: [
+      {
+        description: 'Placeholder "X.XXX" for bid amount (2026)',
+        method: 'placeholder',
+        selector: 'input[placeholder="X.XXX"]',
+      },
+      {
+        description: 'Heuristic: input near "Bid" heading',
+        method: 'heuristic',
+        labelText: 'Bid',
+        targetTag: 'input[type="text"]',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
   {
     fieldPath: 'ad_set.targeting.geo_locations',
     strategies: [
       {
-        description: 'aria-label for location targeting',
-        method: 'aria-label',
-        selector: '[aria-label*="Location"], [aria-label*="location"]',
-      },
-      {
-        description: 'data-testid for locations section',
-        method: 'data-testid',
-        selector: '[data-testid*="location"], [data-testid*="geo"]',
+        description: 'Heuristic: value text near "Locations" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Locations',
+        targetTag: 'span',
       },
       {
         description: 'Text match: "Locations" section heading',
@@ -360,29 +341,14 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.INSIDE,
   },
 
-  // Age Range (targeting)
-  // Strategy: aria-label with "Age" substring match.
-  //   WARNING: [aria-label*="Age"] is very broad -- may match unrelated elements.
-  // Fallback 1: data-testid with "age-range" or "age_range".
-  // Fallback 2: Text content "Age" in <span> -- extremely broad, will match many elements.
-  // The getter (getAgeRange) looks for two <input> or <select> elements inside the
-  //   container and parses them as min/max integers.
-  // Known limitation: Meta typically uses custom dropdown selects (not native <input>
-  //   or <select>) for age range. The mock uses <input type="number"> which may
-  //   not reflect the real DOM.
-  // Risk: MEDIUM -- broad selectors, potential DOM mismatch.
   {
     fieldPath: 'ad_set.targeting.age_range',
     strategies: [
       {
-        description: 'aria-label for age range',
-        method: 'aria-label',
-        selector: '[aria-label*="Age"], [aria-label*="age"]',
-      },
-      {
-        description: 'data-testid for age range',
-        method: 'data-testid',
-        selector: '[data-testid*="age-range"], [data-testid*="age_range"]',
+        description: 'Heuristic: value near "Age" heading (2026 summary text)',
+        method: 'heuristic',
+        labelText: 'Age',
+        targetTag: 'span',
       },
       {
         description: 'Text match: "Age" label',
@@ -394,25 +360,14 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Gender (targeting)
-  // Strategy: aria-label with "Gender" match. Straightforward section.
-  // Fallback 1: data-testid with "gender".
-  // Fallback 2: Text content "Gender" in <span>.
-  // The getter (getGenders) looks for checked checkboxes/radios or [aria-checked="true"]
-  //   and reads the associated label text.
-  // Risk: LOW-MEDIUM -- simple selection UI.
   {
     fieldPath: 'ad_set.targeting.genders',
     strategies: [
       {
-        description: 'aria-label for gender selection',
-        method: 'aria-label',
-        selector: '[aria-label*="Gender"], [aria-label*="gender"]',
-      },
-      {
-        description: 'data-testid for gender selection',
-        method: 'data-testid',
-        selector: '[data-testid*="gender"]',
+        description: 'Heuristic: value near "Gender" heading (2026 summary text)',
+        method: 'heuristic',
+        labelText: 'Gender',
+        targetTag: 'span',
       },
       {
         description: 'Text match: "Gender" section',
@@ -424,23 +379,14 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Languages (targeting)
-  // Strategy: aria-label with "Language" match.
-  // The getter (getLanguages) looks for .tag, .chip, [role="listitem"] inside
-  //   the container, then falls back to React Fiber for LanguageSelector/LocaleSelector.
-  // Risk: LOW-MEDIUM -- chip-based multi-select pattern.
   {
     fieldPath: 'ad_set.targeting.languages',
     strategies: [
       {
-        description: 'aria-label for language multi-select',
-        method: 'aria-label',
-        selector: '[aria-label*="Language"], [aria-label*="language"]',
-      },
-      {
-        description: 'data-testid for language selection',
-        method: 'data-testid',
-        selector: '[data-testid*="language"]',
+        description: 'Heuristic: value near "Languages" heading (2026 summary text)',
+        method: 'heuristic',
+        labelText: 'Languages',
+        targetTag: 'span',
       },
       {
         description: 'Text match: "Languages" section',
@@ -452,67 +398,32 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Custom Audiences (targeting)
-  // Strategy: data-testid containing "custom-audience" or "custom_audience".
-  // Fallback 1: aria-label with "Custom audience" (case-insensitive).
-  // Fallback 2: aria-label with "Audience" (broader, scoped to audience picker context).
-  // Fallback 3: Text content match for "Custom Audiences" section heading.
-  // The getter (getCustomAudiences) looks for .chip, .tag, [role="listitem"]
-  //   inside the resolved container, then falls back to React Fiber for
-  //   CustomAudience/AudienceSelector/AudiencePicker components.
-  // Known limitation: Custom audiences are managed via a separate dialog/picker
-  //   component. The selected audiences may appear as removable chips.
-  // Risk: HIGH -- no prior registry entry, getter relied on speculative direct query.
   {
     fieldPath: 'ad_set.targeting.custom_audiences',
     strategies: [
       {
-        description: 'data-testid for custom audience picker',
-        method: 'data-testid',
-        selector: '[data-testid*="custom-audience"], [data-testid*="custom_audience"]',
+        description: 'Placeholder "Search existing audiences" (2026)',
+        method: 'placeholder',
+        selector: 'input[placeholder*="Search existing audiences" i]',
       },
       {
-        description: 'aria-label for Custom Audiences',
-        method: 'aria-label',
-        selector: '[aria-label*="Custom audience" i], [aria-label*="Custom Audience" i]',
-      },
-      {
-        description: 'aria-label for audience picker (broader)',
-        method: 'aria-label',
-        selector: '[aria-label*="audience-picker" i], [aria-label*="Audience picker" i]',
-      },
-      {
-        description: 'Text match: "Custom Audiences" section heading',
-        method: 'text-content',
-        textMatch: 'Custom Audiences',
-        tagName: 'span',
+        description: 'Heuristic: input near "Audience" heading',
+        method: 'heuristic',
+        labelText: 'Audience',
+        targetTag: 'input[role="combobox"]',
       },
     ],
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Placements (Advantage+ vs Manual)
-  // Strategy: aria-label with "Placement" match.
-  // The getter (getPlacements) checks for checked checkboxes, [aria-checked="true"],
-  //   then reads label text. Falls back to React Fiber for PlacementSelector/
-  //   PlacementPicker/PlacementConfig component, checking for .placementType,
-  //   .selectedPlacements, .isAdvantagePlus, .isAutomaticPlacements props.
-  // Known limitation: Meta's placement UI has been redesigned multiple times.
-  //   "Advantage+ placements" (automatic) vs "Manual placements" is the current
-  //   binary, but the full manual placement tree is deeply nested.
-  // Risk: MEDIUM -- UI redesigns are frequent for this section.
   {
     fieldPath: 'ad_set.placements',
     strategies: [
       {
-        description: 'aria-label for placements section',
-        method: 'aria-label',
-        selector: '[aria-label*="Placement"], [aria-label*="placement"]',
-      },
-      {
-        description: 'data-testid for placements',
-        method: 'data-testid',
-        selector: '[data-testid*="placement"]',
+        description: 'Heuristic: radio near "Placements" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Placements',
+        targetTag: 'input[type="radio"]',
       },
       {
         description: 'Text match: "Placements" section heading',
@@ -524,23 +435,14 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Schedule Start Date
-  // Strategy: aria-label for "Start date", data-testid fallback, heuristic proximity.
-  // Known limitation: Meta uses a custom date picker component. The actual <input>
-  //   may be hidden, with a formatted date display shown instead.
-  // Risk: LOW-MEDIUM.
   {
     fieldPath: 'ad_set.schedule.start_date',
     strategies: [
       {
-        description: 'aria-label for start date',
-        method: 'aria-label',
-        selector: '[aria-label*="Start date"], [aria-label*="start date"]',
-      },
-      {
-        description: 'data-testid for start date',
-        method: 'data-testid',
-        selector: '[data-testid*="start-date"], [data-testid*="start_date"]',
+        description: 'Placeholder "mm/dd/yyyy" near "Start date" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Start date',
+        targetTag: 'input[placeholder="mm/dd/yyyy"]',
       },
       {
         description: 'Heuristic: input near "Start date" label',
@@ -552,21 +454,14 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Schedule End Date
-  // Strategy: Same pattern as start_date.
-  // Risk: LOW-MEDIUM.
   {
     fieldPath: 'ad_set.schedule.end_date',
     strategies: [
       {
-        description: 'aria-label for end date',
-        method: 'aria-label',
-        selector: '[aria-label*="End date"], [aria-label*="end date"]',
-      },
-      {
-        description: 'data-testid for end date',
-        method: 'data-testid',
-        selector: '[data-testid*="end-date"], [data-testid*="end_date"]',
+        description: 'Placeholder "mm/dd/yyyy" near "End date" heading (2026)',
+        method: 'heuristic',
+        labelText: 'End date',
+        targetTag: 'input[placeholder="mm/dd/yyyy"]',
       },
       {
         description: 'Heuristic: input near "End date" label',
@@ -578,27 +473,36 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
+  {
+    fieldPath: 'ad_set.beneficiary_payer',
+    strategies: [
+      {
+        description: 'Combobox near "Beneficiary and payer" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Beneficiary and payer',
+        targetTag: '[role="combobox"]',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
   // ── Ad Level ────────────────────────────────────────────────────────────
 
-  // Ad Name
-  // Strategy: Same pattern as campaign.name and ad_set.name.
-  // NOTE: No dedicated mock fixture covers ad-level fields. These are untested.
-  // Risk: LOW -- standard text input pattern.
   {
     fieldPath: 'ad.name',
     strategies: [
       {
-        description: 'aria-label containing "Ad name"',
-        method: 'aria-label',
-        selector: 'input[aria-label*="Ad name"]',
+        description: 'Placeholder "ad name" (2026 verified)',
+        method: 'placeholder',
+        selector: 'input[placeholder*="ad name" i]',
       },
       {
-        description: 'data-testid for ad name',
-        method: 'data-testid',
-        selector: '[data-testid*="ad-name"] input, [data-testid*="ad_name"] input',
+        description: 'Placeholder "Enter your ad name" (2026 verified)',
+        method: 'placeholder',
+        selector: 'input[placeholder*="Enter your ad name" i]',
       },
       {
-        description: 'Heuristic: input near "Ad name" label',
+        description: 'Heuristic: input near "Ad name" heading',
         method: 'heuristic',
         labelText: 'Ad name',
         targetTag: 'input',
@@ -607,26 +511,65 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Destination URL
-  // Strategy: aria-label with "Website URL". Meta's label may vary between
-  //   "Website URL", "Destination", or "URL" depending on the ad format.
-  // NOTE: Untested in mock fixtures.
-  // Risk: LOW-MEDIUM -- label text may vary by ad format.
+  {
+    fieldPath: 'ad.partnership_ad',
+    strategies: [
+      {
+        description: 'Switch near "Partnership ad" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Partnership ad',
+        targetTag: '[role="switch"]',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'ad.creative.page_id',
+    strategies: [
+      {
+        description: 'First combobox near "Identity" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Identity',
+        targetTag: '[role="combobox"]',
+      },
+      {
+        description: 'Text match: "Facebook Page" label (legacy)',
+        method: 'text-content',
+        textMatch: 'Facebook Page',
+        tagName: 'span',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'ad.creative.instagram_account',
+    strategies: [
+      {
+        description: 'Combobox with aria-label "Instagram account" (2026 verified)',
+        method: 'aria-label',
+        selector: '[role="combobox"][aria-label="Instagram account"]',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
   {
     fieldPath: 'ad.creative.destination_url',
     strategies: [
       {
-        description: 'aria-label for Website URL input',
-        method: 'aria-label',
-        selector: 'input[aria-label*="Website URL"], input[aria-label*="website URL"]',
+        description: 'Placeholder "Enter the URL" (2026 verified)',
+        method: 'placeholder',
+        selector: 'input[placeholder*="Enter the URL" i]',
       },
       {
-        description: 'data-testid for destination URL',
-        method: 'data-testid',
-        selector: '[data-testid*="destination-url"] input, [data-testid*="website-url"] input',
+        description: 'Placeholder "URL you want to promote" (2026)',
+        method: 'placeholder',
+        selector: 'input[placeholder*="URL you want to promote" i]',
       },
       {
-        description: 'Heuristic: input near "Website URL" label',
+        description: 'Heuristic: input near "Website URL" heading',
         method: 'heuristic',
         labelText: 'Website URL',
         targetTag: 'input',
@@ -635,24 +578,14 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // CTA (Call to Action) Type
-  // Strategy: aria-label with "Call to action" match.
-  // The getter (getCTAType) reads from HTMLSelectElement.value, or
-  //   [aria-selected="true"] option text, or element textContent.
-  // NOTE: Untested in mock fixtures. CTA is a custom dropdown in Meta's UI.
-  // Risk: MEDIUM.
   {
     fieldPath: 'ad.creative.cta_type',
     strategies: [
       {
-        description: 'aria-label for CTA dropdown',
-        method: 'aria-label',
-        selector: '[aria-label*="Call to action"], [aria-label*="call to action"]',
-      },
-      {
-        description: 'data-testid for CTA type',
-        method: 'data-testid',
-        selector: '[data-testid*="cta"], [data-testid*="call-to-action"]',
+        description: 'Combobox near "Call to action" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Call to action',
+        targetTag: '[role="combobox"]',
       },
       {
         description: 'Text match: "Call to action" label',
@@ -664,32 +597,19 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
-  // Facebook Page ID (Identity)
-  // Strategy: aria-label with "Facebook Page" match.
-  // Known limitation: Meta may label this section "Identity" or "Page" without
-  //   the "Facebook Page" prefix. The getter (getPageId) also checks for
-  //   data-page-id and data-id attributes, and falls back to React Fiber
-  //   for PageSelector/PagePicker/FacebookPage components.
-  // NOTE: Untested in mock fixtures.
-  // Risk: MEDIUM -- label may not include "Facebook Page" text.
   {
-    fieldPath: 'ad.creative.page_id',
+    fieldPath: 'ad.tracking.url_parameters',
     strategies: [
       {
-        description: 'aria-label for Facebook Page selector',
-        method: 'aria-label',
-        selector: '[aria-label*="Facebook Page"], [aria-label*="facebook page"]',
+        description: 'Placeholder "key1=value1" (2026)',
+        method: 'placeholder',
+        selector: 'input[placeholder*="key1=value1"]',
       },
       {
-        description: 'data-testid for page selector',
-        method: 'data-testid',
-        selector: '[data-testid*="page-selector"], [data-testid*="facebook-page"]',
-      },
-      {
-        description: 'Text match: "Facebook Page" label',
-        method: 'text-content',
-        textMatch: 'Facebook Page',
-        tagName: 'span',
+        description: 'Heuristic: input near "URL parameters" heading',
+        method: 'heuristic',
+        labelText: 'URL parameters',
+        targetTag: 'input',
       },
     ],
     injectionPosition: InjectionPosition.AFTER,
@@ -698,17 +618,14 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
 
 /**
  * Publish button selector configuration (special case -- not a field).
+ * 2026: Publish is a div[role="button"] with text "Publish", not a native button.
  */
 export const PUBLISH_BUTTON_SELECTORS: SelectorStrategy[] = [
   {
-    description: 'Submit button type',
-    method: 'aria-label',
-    selector: 'button[type="submit"]',
-  },
-  {
-    description: 'data-testid for publish button',
-    method: 'data-testid',
-    selector: '[data-testid*="publish"] button, [data-testid*="submit"] button',
+    description: 'Text match: "Publish" role=button (2026)',
+    method: 'text-content',
+    textMatch: 'Publish',
+    tagName: '[role="button"]',
   },
   {
     description: 'Text match: "Publish" button',
@@ -723,6 +640,35 @@ export const PUBLISH_BUTTON_SELECTORS: SelectorStrategy[] = [
     tagName: 'button',
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Section Proximity Helper (2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * Find a DOM element near a section heading.
+ *
+ * In 2026 Meta Ads Manager, most fields lack aria-label/data-testid and can
+ * only be located by proximity to their section heading text.
+ *
+ * @param sectionText - Text to search for in heading elements (case-insensitive)
+ * @param selector - CSS selector to find within the heading's ancestor containers
+ * @returns The first matching element, or null
+ */
+export function findNearSection(sectionText: string, selector: string): HTMLElement | null {
+  const headings = document.querySelectorAll('h2, h3, h4, [role="heading"]');
+  for (const heading of headings) {
+    if (heading.textContent?.toLowerCase().includes(sectionText.toLowerCase())) {
+      let container = heading.closest('div') || heading.parentElement;
+      for (let i = 0; i < 5 && container; i++) {
+        const el = container.querySelector(selector);
+        if (el && el !== heading) return el as HTMLElement;
+        container = container.parentElement;
+      }
+    }
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // DOM Query Helpers
@@ -1019,44 +965,34 @@ export function getInjectionPointForField(
  */
 const FIELD_FALLBACK_SELECTORS: Record<string, string[]> = {
   'campaign.name': [
-    '[data-surface*="name"]',
-    '[aria-label*="Campaign name"]',
+    'input[placeholder*="campaign name" i]',
     'input[placeholder*="name" i]',
   ],
   'campaign.budget_value': [
-    '[data-surface*="budget"]',
-    '[aria-label*="Budget"]',
+    'input[placeholder*="enter amount" i]',
     'input[inputmode="decimal"]',
   ],
   'campaign.budget_type': [
-    '[data-surface*="budget"]',
-    '[aria-label*="Budget"]',
+    '[role="combobox"]',
   ],
   'campaign.objective': [
-    '[data-surface*="objective"]',
-    '[aria-label*="Objective"]',
+    '[role="row"]:has(input[type="radio"]:checked)',
   ],
   'ad_set.targeting.geo_locations': [
     '[data-surface*="geo"]',
-    '[aria-label*="Location"]',
-    '[data-surface*="targeting"]',
   ],
   'ad_set.name': [
-    '[data-surface*="adset"]',
-    'input[placeholder*="Ad set name" i]',
+    'input[placeholder*="ad set name" i]',
   ],
   'ad_set.targeting.age_range': [
     '[data-surface*="age"]',
-    '[data-surface*="targeting"]',
   ],
   'ad.name': [
-    '[data-surface*="ad-name"]',
-    'input[placeholder*="Ad name" i]',
+    'input[placeholder*="ad name" i]',
   ],
   'ad.creative.destination_url': [
-    '[data-surface*="url"]',
-    '[data-surface*="destination"]',
     'input[placeholder*="URL" i]',
+    'input[placeholder*="Enter the URL" i]',
   ],
 };
 

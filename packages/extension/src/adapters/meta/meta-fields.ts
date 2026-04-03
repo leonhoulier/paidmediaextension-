@@ -18,7 +18,8 @@
  */
 
 import { EntityLevel, RemoteEvalQuery, RemoteEvalResult } from '@media-buying-governance/shared';
-import { findFieldElement } from './meta-selectors.js';
+// findFieldElement no longer used by 2026 getters (direct selectors used instead)
+// but kept as comment for reference: import { findFieldElement } from './meta-selectors.js';
 import {
   getMetaDomFieldPaths,
   getMetaFieldPaths,
@@ -404,257 +405,266 @@ function getNestedProp(obj: Record<string, unknown>, keys: string[]): unknown {
 }
 
 // ---------------------------------------------------------------------------
-// Individual Field Getters
+// Direct DOM Selector Utilities (2026 Meta Ads Manager)
+// ---------------------------------------------------------------------------
+
+/**
+ * Find a DOM element near a section heading by walking up the tree.
+ *
+ * @param headingText - Text to match in heading elements (case-insensitive substring)
+ * @param childSelector - CSS selector to find within the heading's container
+ * @param maxAncestorLevels - How many parent levels to walk up (default 8)
+ * @returns The first matching child element, or null
+ */
+function findElementNearHeading(
+  headingText: string,
+  childSelector: string,
+  maxAncestorLevels: number = 8,
+): HTMLElement | null {
+  const headings = document.querySelectorAll<HTMLElement>('[role="heading"], h1, h2, h3, h4, h5, h6');
+  for (const h of headings) {
+    if (!h.textContent?.toLowerCase().includes(headingText.toLowerCase())) continue;
+    let container: HTMLElement | null = h.closest('div');
+    for (let i = 0; i < maxAncestorLevels && container; i++) {
+      const match = container.querySelector<HTMLElement>(childSelector);
+      if (match) return match;
+      container = container.parentElement;
+    }
+  }
+  return null;
+}
+
+/**
+ * Find ALL DOM elements near a section heading.
+ */
+function findAllElementsNearHeading(
+  headingText: string,
+  childSelector: string,
+  maxAncestorLevels: number = 8,
+): HTMLElement[] {
+  const headings = document.querySelectorAll<HTMLElement>('[role="heading"], h1, h2, h3, h4, h5, h6');
+  for (const h of headings) {
+    if (!h.textContent?.toLowerCase().includes(headingText.toLowerCase())) continue;
+    let container: HTMLElement | null = h.closest('div');
+    for (let i = 0; i < maxAncestorLevels && container; i++) {
+      const matches = container.querySelectorAll<HTMLElement>(childSelector);
+      if (matches.length > 0) return Array.from(matches);
+      container = container.parentElement;
+    }
+  }
+  return [];
+}
+
+/**
+ * Read summary/value text near a section heading.
+ *
+ * In 2026 Meta, targeting fields (age, gender, languages, geo) display
+ * summary text near their heading with an "Edit" button. This reads that text.
+ */
+function readSummaryTextNearHeading(headingText: string): string | null {
+  const headings = document.querySelectorAll<HTMLElement>('[role="heading"], h1, h2, h3, h4, h5, h6');
+  for (const h of headings) {
+    if (!h.textContent?.toLowerCase().includes(headingText.toLowerCase())) continue;
+    let container: HTMLElement | null = h.parentElement;
+    for (let i = 0; i < 5 && container; i++) {
+      const children = container.children;
+      for (const child of children) {
+        if (child === h) continue;
+        const text = (child as HTMLElement).textContent?.trim();
+        if (text && text !== 'Edit' && text !== headingText && text.length < 200) {
+          return text;
+        }
+      }
+      container = container.parentElement;
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Individual Field Getters (2026 Meta Ads Manager — direct selectors)
 // ---------------------------------------------------------------------------
 
 /**
  * Extract the campaign name from the DOM.
+ * 2026 DOM: `<input placeholder="Enter your campaign name here...">`
  */
 export function getCampaignName(): string | null {
-  const el = findFieldElement('campaign.name');
-  if (el && el.tagName === 'INPUT') {
-    return (el as HTMLInputElement).value || null;
-  }
-  // React Fiber fallback
-  if (el) {
-    const props = getReactFiberProps(el);
-    if (props && typeof props.value === 'string') {
-      return props.value;
-    }
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="campaign name" i]');
+  if (el?.value) return el.value;
+
+  const nearHeading = findElementNearHeading('Campaign name', 'input[type="text"], input[role="combobox"]');
+  if (nearHeading && (nearHeading as HTMLInputElement).value) {
+    return (nearHeading as HTMLInputElement).value;
   }
   return null;
 }
 
 /**
  * Extract the selected campaign objective.
- *
- * The objective is typically a card or radio button selection.
- * We look for aria-selected="true" or a selected/active CSS class.
- * Falls back to React Fiber for the component's value prop.
+ * 2026 DOM: `[role="row"]:has(input[type="radio"]:checked)` with heading text.
  */
 export function getCampaignObjective(): string | null {
-  const container = findFieldElement('campaign.objective');
-  if (!container) return null;
-
-  // Look for selected card / radio button
-  const selected =
-    container.querySelector<HTMLElement>('[aria-selected="true"]') ??
-    container.querySelector<HTMLElement>('[aria-checked="true"]') ??
-    container.querySelector<HTMLElement>('.selected, .active, [data-selected="true"]');
-
-  if (selected) {
-    return selected.textContent?.trim() || null;
+  const checkedRow = document.querySelector<HTMLElement>(
+    '[role="row"]:has(input[type="radio"]:checked)',
+  );
+  if (checkedRow) {
+    const heading = checkedRow.querySelector<HTMLElement>('[role="heading"], h4');
+    if (heading?.textContent?.trim()) return heading.textContent.trim();
   }
 
-  // React Fiber fallback: walk the fiber tree to find ObjectiveSelector
-  const fiberProps = findReactComponentProps(container, /Objective|ObjectiveSelector/i);
-  if (fiberProps && typeof fiberProps.value === 'string') {
-    return fiberProps.value;
+  const rows = findAllElementsNearHeading('Campaign objective', '[role="row"]');
+  for (const row of rows) {
+    const radio = row.querySelector<HTMLInputElement>('input[type="radio"]');
+    if (radio?.checked) {
+      const heading = row.querySelector<HTMLElement>('[role="heading"], h4');
+      if (heading?.textContent?.trim()) return heading.textContent.trim();
+    }
   }
-
-  // Direct fiber props fallback
-  const props = getReactFiberProps(container);
-  if (props && typeof props.value === 'string') {
-    return props.value;
-  }
-
   return null;
 }
 
 /**
  * Extract the budget type (Daily / Lifetime).
+ * 2026 DOM: `<div role="combobox">` near "Budget" heading.
  */
 export function getCampaignBudgetType(): string | null {
-  const el = findFieldElement('campaign.budget_type');
-  if (!el) return null;
-
-  // Dropdown value (legacy native select)
-  if (el instanceof HTMLSelectElement) {
-    return el.value || null;
-  }
-
-  // Check the element's own text content first (2026 Meta DOM: plain text in div)
-  const ownText = el.textContent?.trim().toLowerCase() ?? '';
-  if (ownText.includes('daily')) return 'daily';
-  if (ownText.includes('lifetime')) return 'lifetime';
-
-  // Read text content of the selected option (custom dropdown)
-  const selectedOption =
-    el.querySelector<HTMLElement>('[aria-selected="true"]') ??
-    el.querySelector<HTMLElement>('[aria-checked="true"]') ??
-    el.querySelector<HTMLElement>('.selected');
-  if (selectedOption) {
-    const text = selectedOption.textContent?.trim().toLowerCase() ?? '';
+  const combo = findElementNearHeading('Budget', '[role="combobox"]');
+  if (combo) {
+    const text = combo.textContent?.trim().toLowerCase() ?? '';
     if (text.includes('daily')) return 'daily';
     if (text.includes('lifetime')) return 'lifetime';
-    return text || null;
   }
-
-  // React Fiber fallback
-  const props = getReactFiberProps(el);
-  if (props && typeof props.value === 'string') {
-    return props.value;
-  }
-
   return null;
 }
 
 /**
  * Extract the budget value (numeric).
- *
- * Handles currency formatting (commas, dollar signs, etc.).
+ * 2026 DOM: `<input placeholder="Please enter amount">` with value "5.00".
  */
 export function getCampaignBudgetValue(): number | null {
-  const el = findFieldElement('campaign.budget_value');
-  console.log('[BUDGET-DEBUG] findFieldElement result:', el?.tagName, el?.className?.substring(0, 30), 'value:', (el as HTMLInputElement)?.value);
-  if (!el) return null;
-
-  let rawValue: string | null = null;
-
-  if (el.tagName === 'INPUT') {
-    rawValue = (el as HTMLInputElement).value;
-    console.log('[BUDGET-DEBUG] INPUT value:', rawValue);
-  } else {
-    const props = getReactFiberProps(el);
-    if (props && (typeof props.value === 'string' || typeof props.value === 'number')) {
-      rawValue = String(props.value);
-    }
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="enter amount" i]');
+  if (el?.value) {
+    const cleaned = el.value.replace(/[^0-9.]/g, '');
+    const parsed = parseFloat(cleaned);
+    if (!isNaN(parsed)) return parsed;
   }
 
-  if (!rawValue) return null;
-
-  // Strip currency symbols and formatting
-  const cleaned = rawValue.replace(/[^0-9.]/g, '');
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? null : parsed;
+  const nearHeading = findElementNearHeading('Budget', 'input[type="text"]:not([role="combobox"])');
+  if (nearHeading && (nearHeading as HTMLInputElement).value) {
+    const cleaned = (nearHeading as HTMLInputElement).value.replace(/[^0-9.]/g, '');
+    const parsed = parseFloat(cleaned);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return null;
 }
 
 /**
- * Extract the CBO (Campaign Budget Optimization / Advantage+) toggle state.
- *
- * Uses a multi-strategy approach:
- * 1. aria-checked attribute on the toggle element
- * 2. Checkbox input state
- * 3. React Fiber traversal for the CBOToggle component
+ * Extract the CBO / Advantage+ Campaign Budget toggle state.
+ * 2026 DOM: `[role="switch"]` near heading containing "Advantage campaign budget".
  */
 export function getCampaignCBOEnabled(): boolean | null {
-  const el = findFieldElement('campaign.cbo_enabled');
-  if (!el) return null;
+  const sw = findElementNearHeading('Advantage campaign budget', '[role="switch"]')
+    ?? findElementNearHeading('Campaign budget optimization', '[role="switch"]');
+  if (!sw) return null;
+  return sw.getAttribute('aria-checked') === 'true';
+}
 
-  // Check aria-checked attribute (standard for toggle switches)
-  const ariaChecked = el.getAttribute('aria-checked');
-  if (ariaChecked !== null) {
-    return ariaChecked === 'true';
-  }
+/**
+ * Extract the buying type (Auction / Reach and frequency).
+ * 2026 DOM: `[role="combobox"]` near "Campaign details" heading.
+ */
+export function getCampaignBuyingType(): string | null {
+  const combo = findElementNearHeading('Campaign details', '[role="combobox"]');
+  return combo?.textContent?.trim() || null;
+}
 
-  // Check for checkbox input
-  if (el.tagName === 'INPUT' && (el as HTMLInputElement).type === 'checkbox') {
-    return (el as HTMLInputElement).checked;
-  }
-
-  // Look for a child switch/checkbox
-  const toggle =
-    el.querySelector<HTMLElement>('[role="switch"]') ??
-    el.querySelector<HTMLInputElement>('input[type="checkbox"]');
-  if (toggle) {
-    const checked = toggle.getAttribute('aria-checked');
-    if (checked !== null) return checked === 'true';
-    if (toggle.tagName === 'INPUT') return (toggle as HTMLInputElement).checked;
-  }
-
-  // React Fiber deep extraction: walk tree to find CBOToggle/AdvantageToggle
-  const fiberProps = findReactComponentProps(el, /CBO|Advantage|BudgetOptimization/i);
-  if (fiberProps) {
-    if (typeof fiberProps.checked === 'boolean') return fiberProps.checked;
-    if (typeof fiberProps.value === 'boolean') return fiberProps.value;
-    if (typeof fiberProps.isEnabled === 'boolean') return fiberProps.isEnabled;
-  }
-
-  // Direct fiber props fallback
-  const props = getReactFiberProps(el);
-  if (props && typeof props.checked === 'boolean') {
-    return props.checked;
-  }
-  if (props && typeof props.value === 'boolean') {
-    return props.value;
-  }
-
+/**
+ * Extract the special ad categories.
+ * 2026 DOM: `[role="combobox"]` near "Special Ad Categories" heading.
+ */
+export function getCampaignSpecialAdCategories(): string | null {
+  const combo = findElementNearHeading('Special Ad Categories', '[role="combobox"]');
+  const text = combo?.textContent?.trim();
+  if (text && !text.toLowerCase().includes('declare category')) return text;
   return null;
+}
+
+/**
+ * Extract A/B test toggle state.
+ * 2026 DOM: `[role="switch"]` near "A/B test" heading.
+ */
+export function getCampaignABTest(): boolean | null {
+  const sw = findElementNearHeading('A/B test', '[role="switch"]');
+  if (!sw) return null;
+  return sw.getAttribute('aria-checked') === 'true';
 }
 
 /**
  * Extract the ad set name.
+ * 2026 DOM: `<input placeholder="Enter your ad set name here...">`
  */
 export function getAdSetName(): string | null {
-  const el = findFieldElement('ad_set.name');
-  if (el instanceof HTMLInputElement) {
-    return el.value || null;
-  }
-  if (el) {
-    const props = getReactFiberProps(el);
-    if (props && typeof props.value === 'string') {
-      return props.value;
-    }
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="ad set name" i]');
+  if (el?.value) return el.value;
+
+  const nearHeading = findElementNearHeading('Ad set name', 'input[type="text"], input[role="combobox"]');
+  if (nearHeading && (nearHeading as HTMLInputElement).value) {
+    return (nearHeading as HTMLInputElement).value;
   }
   return null;
 }
 
 /**
- * Extract selected geo locations (array of location names/IDs).
- *
- * Uses React Fiber deep extraction for the location component tree,
- * with DOM tag/chip fallback.
+ * Extract the conversion location.
+ * 2026 DOM: checked radio within "Conversion location" section.
+ */
+export function getConversionLocation(): string | null {
+  const label = findElementNearHeading('Conversion location', 'label:has(input[type="radio"]:checked)');
+  return label?.textContent?.trim() || null;
+}
+
+/**
+ * Extract the performance goal.
+ * 2026 DOM: `[role="combobox"]` near performance goal section.
+ */
+export function getPerformanceGoal(): string | null {
+  const combo = findElementNearHeading('Performance goal', '[role="combobox"]');
+  return combo?.textContent?.trim() || null;
+}
+
+/**
+ * Extract the bid amount.
+ * 2026 DOM: `<input placeholder="X.XXX">` below performance goal.
+ */
+export function getBidAmount(): number | null {
+  const el = document.querySelector<HTMLInputElement>('input[placeholder="X.XXX"]');
+  if (el?.value) {
+    const parsed = parseFloat(el.value.replace(/[^0-9.]/g, ''));
+    if (!isNaN(parsed)) return parsed;
+  }
+  return null;
+}
+
+/**
+ * Extract selected geo locations.
+ * 2026 DOM: summary text near "Locations" heading (e.g. "France" or "None added").
  */
 export function getGeoLocations(): string[] | null {
-  const container = findFieldElement('ad_set.targeting.geo_locations');
-  if (!container) return null;
-
-  // Strategy 1: Look for selected location tags/chips in DOM
-  const locationElements = container.querySelectorAll<HTMLElement>(
-    '[data-testid*="location-tag"], .selected-location, [role="listitem"], .tag, .chip',
-  );
-
-  if (locationElements.length > 0) {
-    const locations: string[] = [];
-    for (const el of locationElements) {
-      const text = el.textContent?.trim();
-      if (text) locations.push(text);
-    }
-    if (locations.length > 0) return locations;
-  }
-
-  // Strategy 2: Walk the React Fiber tree for targeting data
-  const fiberProps = findReactComponentProps(container, /Location|GeoTarget|TargetingLocations/i);
-  if (fiberProps) {
-    // Try common prop patterns
-    if (Array.isArray(fiberProps.selectedLocations)) {
-      return fiberProps.selectedLocations.map((loc: unknown) => {
-        if (typeof loc === 'string') return loc;
-        if (typeof loc === 'object' && loc !== null) {
-          const locObj = loc as Record<string, unknown>;
-          return (locObj.name as string) ?? (locObj.label as string) ?? String(locObj.key ?? loc);
-        }
-        return String(loc);
-      });
-    }
-    if (Array.isArray(fiberProps.locations)) {
-      return fiberProps.locations.map((loc: unknown) =>
-        typeof loc === 'string' ? loc : String(loc),
-      );
-    }
-    if (Array.isArray(fiberProps.value)) {
-      return fiberProps.value.map((v: unknown) => String(v));
+  const headings = document.querySelectorAll<HTMLElement>('[role="heading"], h3, h4');
+  for (const h of headings) {
+    if (h.textContent?.toLowerCase().includes('location')) {
+      const parent = h.parentElement;
+      const valueText = parent?.querySelector('span, div:not([role="heading"])')?.textContent?.trim();
+      if (valueText && valueText !== 'Edit' && valueText.toLowerCase() !== 'locations') {
+        return [valueText];
+      }
     }
   }
 
-  // Strategy 3: React Fiber state extraction
-  const fiberState = findReactComponentState(container, /Location|GeoTarget/i);
-  if (fiberState && typeof fiberState === 'object') {
-    const stateObj = fiberState as Record<string, unknown>;
-    if (Array.isArray(stateObj.selectedLocations)) {
-      return stateObj.selectedLocations.map((loc: unknown) => String(loc));
-    }
-  }
+  // Fallback: readSummaryTextNearHeading
+  const summary = readSummaryTextNearHeading('Locations');
+  if (summary && summary.toLowerCase() !== 'none added') return [summary];
 
   return null;
 }
@@ -671,13 +681,10 @@ const COUNTRY_NAME_TO_CODE: Record<string, string> = {
 
 /**
  * Get targeting countries as ISO codes for rule evaluation.
- * Rules check ad_set.targeting.geo_locations.countries against codes like ["FR", "US"].
  */
 export function getGeoLocationCountries(): string[] | null {
-  // Strategy 1: Try getGeoLocations() (uses findFieldElement container)
   const locations = getGeoLocations();
   if (locations && locations.length > 0) {
-    // Filter out navigation/UI garbage (must be real country names)
     const validLocations = locations.filter((loc: string) => {
       const lower = loc.toLowerCase().trim();
       return lower in COUNTRY_NAME_TO_CODE || /^[A-Z]{2}$/.test(loc.trim());
@@ -689,419 +696,201 @@ export function getGeoLocationCountries(): string[] | null {
       });
     }
   }
-
   return null;
 }
 
 /**
- * Extract the age range (min, max).
- *
- * Tries DOM inputs/selects first, then React Fiber for the
- * AgeRange/AgeSelector component.
+ * Extract the age range as summary text, parsed into min/max.
+ * 2026 DOM: summary text "18 - 65+" near "Age" heading.
  */
 export function getAgeRange(): { min: number; max: number } | null {
-  const container = findFieldElement('ad_set.targeting.age_range');
-  if (!container) return null;
-
-  // Look for min/max inputs
-  const inputs = container.querySelectorAll<HTMLInputElement>('input');
-  if (inputs.length >= 2) {
-    const min = parseInt(inputs[0].value, 10);
-    const max = parseInt(inputs[1].value, 10);
-    if (!isNaN(min) && !isNaN(max)) {
-      return { min, max };
+  const summary = readSummaryTextNearHeading('Age');
+  if (summary) {
+    const match = summary.match(/(\d+)\s*-\s*(\d+)/);
+    if (match) {
+      return { min: parseInt(match[1], 10), max: parseInt(match[2], 10) };
     }
   }
-
-  // Look for select elements
-  const selects = container.querySelectorAll<HTMLSelectElement>('select');
-  if (selects.length >= 2) {
-    const min = parseInt(selects[0].value, 10);
-    const max = parseInt(selects[1].value, 10);
-    if (!isNaN(min) && !isNaN(max)) {
-      return { min, max };
-    }
-  }
-
-  // React Fiber deep extraction: walk tree for AgeRange component
-  const fiberProps = findReactComponentProps(container, /AgeRange|AgeSelector|AgePicker/i);
-  if (fiberProps) {
-    if (typeof fiberProps.minAge === 'number' && typeof fiberProps.maxAge === 'number') {
-      return { min: fiberProps.minAge, max: fiberProps.maxAge };
-    }
-    if (typeof fiberProps.min === 'number' && typeof fiberProps.max === 'number') {
-      return { min: fiberProps.min, max: fiberProps.max };
-    }
-    if (fiberProps.value && typeof fiberProps.value === 'object') {
-      const v = fiberProps.value as Record<string, unknown>;
-      if (typeof v.min === 'number' && typeof v.max === 'number') {
-        return { min: v.min, max: v.max };
-      }
-    }
-  }
-
-  // Direct props fallback
-  const props = getReactFiberProps(container);
-  if (props && typeof props.minAge === 'number' && typeof props.maxAge === 'number') {
-    return { min: props.minAge, max: props.maxAge };
-  }
-
   return null;
 }
 
 /**
- * Extract selected genders (array).
- *
- * Tries DOM checkboxes/radio buttons first, then React Fiber.
+ * Extract selected genders.
+ * 2026 DOM: summary text "All genders" / "Men" / "Women" near "Gender" heading.
  */
 export function getGenders(): string[] | null {
-  const container = findFieldElement('ad_set.targeting.genders');
-  if (!container) return null;
-
-  // Look for checked checkboxes or radio buttons
-  const checked = container.querySelectorAll<HTMLElement>(
-    'input[type="checkbox"]:checked, input[type="radio"]:checked, [aria-checked="true"]',
-  );
-
-  if (checked.length > 0) {
-    const genders: string[] = [];
-    for (const el of checked) {
-      const label = el.closest('label')?.textContent?.trim();
-      if (label) {
-        genders.push(label);
-      } else {
-        const ariaLabel = el.getAttribute('aria-label');
-        if (ariaLabel) genders.push(ariaLabel);
-      }
-    }
-    if (genders.length > 0) return genders;
+  const summary = readSummaryTextNearHeading('Gender');
+  if (summary) {
+    if (summary.toLowerCase().includes('all')) return ['All genders'];
+    return [summary];
   }
-
-  // Look for selected options
-  const selected = container.querySelectorAll<HTMLElement>(
-    '.selected, [aria-selected="true"], [data-selected="true"]',
-  );
-  if (selected.length > 0) {
-    const genders: string[] = [];
-    for (const el of selected) {
-      const text = el.textContent?.trim();
-      if (text) genders.push(text);
-    }
-    if (genders.length > 0) return genders;
-  }
-
-  // React Fiber deep extraction: GenderSelector component
-  const fiberProps = findReactComponentProps(container, /Gender|GenderSelector/i);
-  if (fiberProps) {
-    if (Array.isArray(fiberProps.selectedGenders)) {
-      return fiberProps.selectedGenders.map((g: unknown) => String(g));
-    }
-    if (Array.isArray(fiberProps.value)) {
-      return fiberProps.value.map((g: unknown) => String(g));
-    }
-    if (typeof fiberProps.gender === 'string') {
-      return [fiberProps.gender];
-    }
-  }
-
   return null;
 }
 
 /**
- * Extract selected languages (array).
- *
- * Uses DOM chip/tag elements first, then React Fiber for
- * the LanguageSelector component.
+ * Extract selected languages.
+ * 2026 DOM: summary text "All languages" near "Languages" heading.
  */
 export function getLanguages(): string[] | null {
-  const container = findFieldElement('ad_set.targeting.languages');
-  if (!container) return null;
-
-  // Look for language tags/chips
-  const tags = container.querySelectorAll<HTMLElement>(
-    '.tag, .chip, [role="listitem"], [data-testid*="language-tag"]',
-  );
-
-  if (tags.length > 0) {
-    const languages: string[] = [];
-    for (const el of tags) {
-      const text = el.textContent?.trim();
-      if (text) languages.push(text);
-    }
-    if (languages.length > 0) return languages;
+  const summary = readSummaryTextNearHeading('Languages');
+  if (summary) {
+    if (summary.toLowerCase().includes('all')) return ['All languages'];
+    return summary.split(',').map((s: string) => s.trim()).filter(Boolean);
   }
-
-  // React Fiber deep extraction: LanguageSelector component
-  const fiberProps = findReactComponentProps(container, /Language|LanguageSelector|LocaleSelector/i);
-  if (fiberProps) {
-    if (Array.isArray(fiberProps.selectedLanguages)) {
-      return fiberProps.selectedLanguages.map((l: unknown) => {
-        if (typeof l === 'string') return l;
-        if (typeof l === 'object' && l !== null) {
-          const lObj = l as Record<string, unknown>;
-          return (lObj.name as string) ?? (lObj.label as string) ?? String(l);
-        }
-        return String(l);
-      });
-    }
-    if (Array.isArray(fiberProps.value)) {
-      return fiberProps.value.map((l: unknown) => String(l));
-    }
-  }
-
   return null;
 }
 
 /**
- * Extract selected placements (array).
- *
- * This is one of the most complex fields: Meta's placement selector
- * uses deeply nested React components. We use Fiber deep extraction
- * to walk to the PlacementSelector/PlacementPicker component.
+ * Extract selected placements.
+ * 2026 DOM: radios under "Placements" heading (manual vs advantage+).
  */
 export function getPlacements(): string[] | null {
-  const container = findFieldElement('ad_set.placements');
-  if (!container) return null;
-
-  // Check if "Manual placements" or "Advantage+ placements" is selected
-  const selectedElements = container.querySelectorAll<HTMLElement>(
-    '[aria-checked="true"], input:checked, .selected',
-  );
-
-  if (selectedElements.length > 0) {
-    const placements: string[] = [];
-    for (const el of selectedElements) {
-      const label = el.closest('label')?.textContent?.trim();
-      const normalized = normalizePlacementLabel(label ?? el.textContent ?? null);
-      if (normalized) {
-        placements.push(normalized);
-      }
-    }
-    if (placements.length > 0) return placements;
-  }
-
-  // React Fiber deep extraction: PlacementSelector component
-  const fiberProps = findReactComponentProps(
-    container,
-    /Placement|PlacementSelector|PlacementPicker|PlacementConfig/i,
-  );
-  if (fiberProps) {
-    // Check for Advantage+ vs Manual
-    if (typeof fiberProps.placementType === 'string') {
-      return [fiberProps.placementType];
-    }
-    if (Array.isArray(fiberProps.selectedPlacements)) {
-      return fiberProps.selectedPlacements.map((p: unknown) => String(p));
-    }
-    if (Array.isArray(fiberProps.placements)) {
-      return fiberProps.placements.map((p: unknown) => String(p));
-    }
-    if (fiberProps.isAdvantagePlus === true || fiberProps.isAutomaticPlacements === true) {
-      return ['Advantage+ placements'];
+  const rows = findAllElementsNearHeading('Placements', 'input[type="radio"]');
+  for (const radio of rows) {
+    if ((radio as HTMLInputElement).checked) {
+      const label = radio.closest('label')?.textContent?.trim() ?? null;
+      const normalized = normalizePlacementLabel(label);
+      if (normalized) return [normalized];
     }
   }
 
-  // Fiber prop path extraction: try common nested structures
-  const placementValue = extractFiberPropByPath(container, 'placements');
-  if (Array.isArray(placementValue)) {
-    return placementValue.map((p: unknown) => String(p));
-  }
-
+  // Fallback: summary text
+  const summary = readSummaryTextNearHeading('Placements');
+  if (summary) return [summary];
   return null;
 }
 
 /**
- * Extract custom audiences (array of audience IDs/names).
- *
- * Custom audiences are managed via React state in a dialog/picker component.
- * Uses the selector registry (META_FIELD_SELECTORS) to locate the container,
- * then looks for audience chips/tags or falls back to React Fiber.
+ * Extract custom audiences.
+ * 2026 DOM: `input[placeholder="Search existing audiences"]`.
  */
 export function getCustomAudiences(): string[] | null {
-  // Use the selector registry -- no more speculative direct query fallback
-  const container = findFieldElement('ad_set.targeting.custom_audiences');
-  if (!container) return null;
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="Search existing audiences" i]');
+  if (el?.value) return [el.value];
 
-  // DOM approach: look for audience chips/tags
-  const tags = container.querySelectorAll<HTMLElement>(
-    '.tag, .chip, [role="listitem"], [data-testid*="audience-tag"]',
-  );
+  // Look for chips/tags near Audience heading
+  const tags = findAllElementsNearHeading('Audience', '.tag, .chip, [role="listitem"]');
   if (tags.length > 0) {
-    const audiences: string[] = [];
-    for (const el of tags) {
-      const text = el.textContent?.trim();
-      if (text) audiences.push(text);
-    }
+    const audiences = tags.map((t: HTMLElement) => t.textContent?.trim()).filter(Boolean) as string[];
     if (audiences.length > 0) return audiences;
   }
-
-  // React Fiber deep extraction
-  const fiberProps = findReactComponentProps(
-    container,
-    /CustomAudience|AudienceSelector|AudiencePicker/i,
-  );
-  if (fiberProps) {
-    if (Array.isArray(fiberProps.selectedAudiences)) {
-      return fiberProps.selectedAudiences.map((a: unknown) => {
-        if (typeof a === 'string') return a;
-        if (typeof a === 'object' && a !== null) {
-          const aObj = a as Record<string, unknown>;
-          return (aObj.name as string) ?? (aObj.id as string) ?? String(a);
-        }
-        return String(a);
-      });
-    }
-    if (Array.isArray(fiberProps.audiences)) {
-      return fiberProps.audiences.map((a: unknown) => String(a));
-    }
-  }
-
   return null;
 }
 
 /**
  * Extract schedule start date.
+ * 2026 DOM: first `input[placeholder="mm/dd/yyyy"]` near "Start date".
  */
 export function getScheduleStartDate(): string | null {
-  const el = findFieldElement('ad_set.schedule.start_date');
-  if (el instanceof HTMLInputElement) {
-    return normalizeDateLikeValue(el.value);
-  }
-  if (el) {
-    const props = getReactFiberProps(el);
-    if (props && 'value' in props) {
-      return normalizeDateLikeValue(props.value);
-    }
+  const el = findElementNearHeading('Start date', 'input[placeholder="mm/dd/yyyy"]')
+    ?? findElementNearHeading('Start date', 'input');
+  if (el && (el as HTMLInputElement).value) {
+    return normalizeDateLikeValue((el as HTMLInputElement).value);
   }
   return null;
 }
 
 /**
  * Extract schedule end date.
+ * 2026 DOM: `input[placeholder="mm/dd/yyyy"]` near "End date".
  */
 export function getScheduleEndDate(): string | null {
-  const el = findFieldElement('ad_set.schedule.end_date');
-  if (el instanceof HTMLInputElement) {
-    return normalizeDateLikeValue(el.value);
-  }
-  if (el) {
-    const props = getReactFiberProps(el);
-    if (props && 'value' in props) {
-      return normalizeDateLikeValue(props.value);
-    }
+  const el = findElementNearHeading('End date', 'input[placeholder="mm/dd/yyyy"]')
+    ?? findElementNearHeading('End date', 'input');
+  if (el && (el as HTMLInputElement).value) {
+    return normalizeDateLikeValue((el as HTMLInputElement).value);
   }
   return null;
 }
 
 /**
  * Extract the ad name.
+ * 2026 DOM: `<input placeholder="Enter your ad name here...">`
  */
 export function getAdName(): string | null {
-  const el = findFieldElement('ad.name');
-  if (el instanceof HTMLInputElement) {
-    return el.value || null;
-  }
-  if (el) {
-    const props = getReactFiberProps(el);
-    if (props && typeof props.value === 'string') {
-      return props.value;
-    }
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="ad name" i]');
+  if (el?.value) return el.value;
+
+  const nearHeading = findElementNearHeading('Ad name', 'input[type="text"], input[role="combobox"]');
+  if (nearHeading && (nearHeading as HTMLInputElement).value) {
+    return (nearHeading as HTMLInputElement).value;
   }
   return null;
 }
 
 /**
+ * Extract the partnership ad toggle state.
+ * 2026 DOM: `[role="switch"]` near "Partnership ad" heading.
+ */
+export function getPartnershipAd(): boolean | null {
+  const sw = findElementNearHeading('Partnership ad', '[role="switch"]');
+  if (!sw) return null;
+  return sw.getAttribute('aria-checked') === 'true';
+}
+
+/**
  * Extract the destination URL.
+ * 2026 DOM: `<input placeholder="Enter the URL you want to promote">`
  */
 export function getDestinationUrl(): string | null {
-  const el = findFieldElement('ad.creative.destination_url');
-  if (el instanceof HTMLInputElement) {
-    return el.value || null;
-  }
-  if (el) {
-    const props = getReactFiberProps(el);
-    if (props && typeof props.value === 'string') {
-      return props.value;
-    }
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="Enter the URL" i]');
+  if (el?.value) return el.value;
+
+  const nearHeading = findElementNearHeading('Website URL', 'input');
+  if (nearHeading && (nearHeading as HTMLInputElement).value) {
+    return (nearHeading as HTMLInputElement).value;
   }
   return null;
 }
 
 /**
  * Extract the CTA (Call to Action) type.
+ * 2026 DOM: `[role="combobox"]` near "Call to action" heading.
  */
 export function getCTAType(): string | null {
-  const el = findFieldElement('ad.creative.cta_type');
-  if (!el) return null;
+  const combo = findElementNearHeading('Call to action', '[role="combobox"]');
+  return combo?.textContent?.trim() || null;
+}
 
-  // Dropdown value
-  if (el instanceof HTMLSelectElement) {
-    return el.value || null;
+/**
+ * Extract the Facebook Page ID / name.
+ * 2026 DOM: first `[role="combobox"]` in "Identity" section.
+ */
+export function getPageId(): string | null {
+  const combo = findElementNearHeading('Identity', '[role="combobox"]');
+  if (combo) {
+    const text = combo.textContent?.trim();
+    return normalizePageSelectionText(text);
   }
-
-  // Read the visible selected text
-  const selectedOption =
-    el.querySelector<HTMLElement>('[aria-selected="true"]') ??
-    el.querySelector<HTMLElement>('.selected');
-  if (selectedOption) {
-    return selectedOption.textContent?.trim() || null;
-  }
-
-  // Check element's own text
-  const text = el.textContent?.trim();
-  if (text) return text;
-
-  // React Fiber fallback
-  const props = getReactFiberProps(el);
-  if (props && typeof props.value === 'string') {
-    return props.value;
-  }
-
   return null;
 }
 
 /**
- * Extract the Facebook Page ID.
+ * Extract the Instagram account.
+ * 2026 DOM: `[role="combobox"][aria-label="Instagram account"]` (rare aria-label).
  */
-export function getPageId(): string | null {
-  const el = findFieldElement('ad.creative.page_id');
-  if (!el) return null;
+export function getInstagramAccount(): string | null {
+  const combo = document.querySelector<HTMLElement>('[role="combobox"][aria-label="Instagram account"]');
+  return combo?.textContent?.trim() || null;
+}
 
-  // Check for a data attribute containing the page ID
-  const pageId = el.getAttribute('data-page-id') ?? el.getAttribute('data-id');
-  if (pageId) return pageId;
+/**
+ * Extract URL parameters (tracking).
+ * 2026 DOM: `<input placeholder="key1=value1&key2=value2">`.
+ */
+export function getUrlParameters(): string | null {
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="key1=value1"]');
+  return el?.value || null;
+}
 
-  // If it is a select element
-  if (el instanceof HTMLSelectElement) {
-    return el.value || null;
-  }
-
-  // Check visible selected text
-  const selectedOption =
-    el.querySelector<HTMLElement>('[aria-selected="true"]') ??
-    el.querySelector<HTMLElement>('.selected');
-  if (selectedOption) {
-    return normalizePageSelectionText(selectedOption.textContent);
-  }
-
-  // React Fiber fallback -- walk to PageSelector component
-  const fiberProps = findReactComponentProps(el, /PageSelector|PagePicker|FacebookPage/i);
-  if (fiberProps) {
-    if (typeof fiberProps.pageId === 'string') return fiberProps.pageId;
-    if (typeof fiberProps.selectedPageId === 'string') return fiberProps.selectedPageId;
-    if (typeof fiberProps.value === 'string') {
-      return normalizePageSelectionText(fiberProps.value);
-    }
-  }
-
-  const props = getReactFiberProps(el);
-  if (props && typeof props.pageId === 'string') {
-    return props.pageId;
-  }
-  if (props && typeof props.value === 'string') {
-    return normalizePageSelectionText(props.value);
-  }
-
+/**
+ * Extract beneficiary and payer (EU DSA compliance).
+ * 2026 DOM: combobox near "Beneficiary and payer" heading.
+ */
+export function getBeneficiaryPayer(): string | null {
+  const combo = findElementNearHeading('Beneficiary and payer', '[role="combobox"]');
+  const text = combo?.textContent?.trim();
+  if (text && !text.toLowerCase().includes('select a person')) return text;
   return null;
 }
 
@@ -1111,13 +900,22 @@ export function getPageId(): string | null {
 
 /** All DOM getter functions mapped by their field path */
 const FIELD_GETTERS: Record<string, () => unknown> = {
+  // Campaign level
   'campaign.name': getCampaignName,
   'campaign.objective': getCampaignObjective,
   'campaign.budget_type': getCampaignBudgetType,
   'campaign.budget_value': getCampaignBudgetValue,
   'campaign.cbo_enabled': getCampaignCBOEnabled,
+  'campaign.buying_type': getCampaignBuyingType,
+  'campaign.special_ad_categories': getCampaignSpecialAdCategories,
+  'campaign.a_b_test': getCampaignABTest,
+  // Ad set level
   'ad_set.name': getAdSetName,
+  'ad_set.conversion_location': getConversionLocation,
+  'ad_set.performance_goal': getPerformanceGoal,
+  'ad_set.bid_amount': getBidAmount,
   'ad_set.targeting.geo_locations': getGeoLocations,
+  'ad_set.targeting.geo_locations.countries': getGeoLocationCountries,
   'ad_set.targeting.age_range': getAgeRange,
   'ad_set.targeting.genders': getGenders,
   'ad_set.targeting.languages': getLanguages,
@@ -1125,14 +923,18 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'ad_set.placements': getPlacements,
   'ad_set.schedule.start_date': getScheduleStartDate,
   'ad_set.schedule.end_date': getScheduleEndDate,
+  'ad_set.beneficiary_payer': getBeneficiaryPayer,
+  // Ad level
   'ad.name': getAdName,
+  'ad.partnership_ad': getPartnershipAd,
   'ad.creative.destination_url': getDestinationUrl,
   'ad.creative.cta_type': getCTAType,
   'ad.creative.page_id': getPageId,
-  // Aliases: backend rules use these field paths, map to the extraction functions above
+  'ad.creative.instagram_account': getInstagramAccount,
+  'ad.tracking.url_parameters': getUrlParameters,
+  // Aliases: backend rules use these field paths
   'ad.facebook_page_id': getPageId,
   'ad.destination_url': getDestinationUrl,
-  'ad_set.targeting.geo_locations.countries': getGeoLocationCountries,
 };
 
 // ---------------------------------------------------------------------------
