@@ -14,8 +14,8 @@ import type {
 import { ApprovalStatus } from '@media-buying-governance/shared';
 import { logger } from '../utils/logger.js';
 
-/** Default API base URL */
-const DEFAULT_API_BASE = 'http://localhost:3000';
+/** Default API base URL — injected at build time from .env.production */
+const DEFAULT_API_BASE = process.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 /**
  * Get the API base URL from storage or use default

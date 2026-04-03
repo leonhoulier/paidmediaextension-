@@ -18,8 +18,8 @@ import {
   getCachedVersion,
 } from './rule-cache.js';
 
-/** Backend API base URL. Configured during extension pairing. */
-const DEFAULT_API_BASE = 'http://localhost:3000';
+/** Backend API base URL — injected at build time from .env.production */
+const DEFAULT_API_BASE = process.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 /**
  * Get the API base URL from storage or use default

@@ -10,8 +10,8 @@
  *    Force Refresh, Toggle Sidebar, and Disconnect buttons.
  */
 
-/** Admin portal URL */
-const ADMIN_PORTAL_URL = 'http://localhost:5173';
+/** Admin portal URL — injected at build time from .env.production */
+const ADMIN_PORTAL_URL = process.env.VITE_ADMIN_PORTAL_URL || 'http://localhost:5173';
 
 /** SVG icon for the refresh button */
 const REFRESH_ICON_SVG = `

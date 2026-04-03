@@ -470,7 +470,7 @@ async function handleMessage(
 
       try {
         const storage = await chrome.storage.local.get(['extensionToken', 'apiBaseUrl']);
-        const apiBaseUrl = storage.apiBaseUrl || 'http://localhost:3000';
+        const apiBaseUrl = storage.apiBaseUrl || process.env.VITE_API_BASE_URL || 'http://localhost:3000';
         const extensionToken = storage.extensionToken;
 
         const response = await fetch(`${apiBaseUrl}/api/v1/compliance/events`, {
@@ -616,19 +616,12 @@ async function handlePairExtension(
   try {
     const apiBase = await getApiBaseForPairing();
 
-    // Construct a mock Bearer token for local dev.
-    // The FirebaseAuthGuard in local mode (ALLOW_LOCAL_AUTH=true) accepts
-    // base64({ uid, email }) where the email must exist in the database.
-    // We use the default seed admin user.
-    const mockToken = btoa(
-      JSON.stringify({ uid: 'extension-pairing', email: 'admin1@dlg.com' })
-    );
-
-    const response = await fetch(`${apiBase}/api/v1/extension/pair`, {
+    // Use the public pairing endpoint — the invite code IS the authentication.
+    // No Firebase auth needed; the code is a secret token generated in the admin portal.
+    const response = await fetch(`${apiBase}/api/v1/extension/pair-public`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${mockToken}`,
       },
       body: JSON.stringify({ invite_code: inviteCode }),
     });
@@ -708,9 +701,9 @@ async function handleUnpairExtension(): Promise<{ success: boolean }> {
 async function getApiBaseForPairing(): Promise<string> {
   try {
     const result = await chrome.storage.local.get('apiBaseUrl');
-    return (result.apiBaseUrl as string) || 'http://localhost:3000';
+    return (result.apiBaseUrl as string) || process.env.VITE_API_BASE_URL || 'http://localhost:3000';
   } catch {
-    return 'http://localhost:3000';
+    return process.env.VITE_API_BASE_URL || 'http://localhost:3000';
   }
 }
 
