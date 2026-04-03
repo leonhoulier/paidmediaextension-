@@ -4,10 +4,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@8 --activate
+RUN corepack enable && corepack prepare pnpm@10 --activate
 
-# Copy workspace files
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# Copy workspace files (include root tsconfig for shared package build)
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/backend/package.json packages/backend/
 
@@ -27,17 +27,19 @@ RUN pnpm --filter @media-buying-governance/backend prisma:generate
 # Build backend
 RUN pnpm --filter @media-buying-governance/backend build
 
-# Stage 2: Production
-FROM node:20-alpine AS production
+# Stage 2: Production (Debian slim — Prisma needs OpenSSL 1.1/3.x)
+FROM node:20-slim AS production
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@8 --activate
+# Install pnpm + OpenSSL for Prisma
+RUN corepack enable && corepack prepare pnpm@10 --activate && \
+    apt-get update && apt-get install -y openssl wget --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nestjs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs -s /bin/sh nestjs
 
 # Copy workspace files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -51,7 +53,10 @@ RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/packages/backend/dist packages/backend/dist
 COPY --from=builder /app/packages/backend/prisma packages/backend/prisma
-COPY --from=builder /app/packages/backend/node_modules/.prisma packages/backend/node_modules/.prisma
+
+# Generate Prisma client for this platform (Debian)
+# prisma is a devDep, so install it temporarily, generate, then remove
+RUN cd packages/backend && npx prisma@5.22.0 generate && rm -rf /root/.npm
 
 # Create directory for Cloud SQL Unix socket (Cloud Run mounts it here)
 RUN mkdir -p /cloudsql && chown nestjs:nodejs /cloudsql
