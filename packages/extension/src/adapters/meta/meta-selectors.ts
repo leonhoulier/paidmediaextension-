@@ -247,6 +247,31 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     injectionPosition: InjectionPosition.AFTER,
   },
 
+  {
+    fieldPath: 'campaign.bid_strategy',
+    strategies: [
+      {
+        description: 'Combobox near "Campaign bid strategy" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Campaign bid strategy',
+        targetTag: '[role="combobox"]',
+      },
+      {
+        description: 'Text near "Bid strategy" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Bid strategy',
+        targetTag: '[role="combobox"]',
+      },
+      {
+        description: 'Text match: "Highest volume" bid strategy',
+        method: 'text-content',
+        textMatch: 'Highest volume|Lowest cost|Cost cap|Bid cap',
+        tagName: 'div',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
   // ── Ad Set Level ────────────────────────────────────────────────────────
 
   {
@@ -477,9 +502,33 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
     fieldPath: 'ad_set.beneficiary_payer',
     strategies: [
       {
-        description: 'Combobox near "Beneficiary and payer" heading (2026)',
+        description: 'Switch near "Beneficiary and payer" heading (2026)',
         method: 'heuristic',
         labelText: 'Beneficiary and payer',
+        targetTag: '[role="switch"]',
+      },
+      {
+        description: 'Switch with aria-label "advertiser and payer" (2026)',
+        method: 'aria-label',
+        selector: '[role="switch"][aria-label*="advertiser and payer" i]',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'ad_set.facebook_page',
+    strategies: [
+      {
+        description: 'Input near "Facebook Page" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Facebook Page',
+        targetTag: 'input',
+      },
+      {
+        description: 'Combobox near "Facebook Page" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Facebook Page',
         targetTag: '[role="combobox"]',
       },
     ],
@@ -538,6 +587,31 @@ export const META_FIELD_SELECTORS: FieldSelectorConfig[] = [
         method: 'text-content',
         textMatch: 'Facebook Page',
         tagName: 'span',
+      },
+    ],
+    injectionPosition: InjectionPosition.AFTER,
+  },
+
+  {
+    fieldPath: 'ad.creative.format',
+    strategies: [
+      {
+        description: 'Combobox near "Ad setup" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Ad setup',
+        targetTag: '[role="combobox"]',
+      },
+      {
+        description: 'Combobox near "Format" heading (2026)',
+        method: 'heuristic',
+        labelText: 'Format',
+        targetTag: '[role="combobox"]',
+      },
+      {
+        description: 'Text match: "Create ad" format option',
+        method: 'text-content',
+        textMatch: 'Create ad|Use existing post',
+        tagName: 'div',
       },
     ],
     injectionPosition: InjectionPosition.AFTER,

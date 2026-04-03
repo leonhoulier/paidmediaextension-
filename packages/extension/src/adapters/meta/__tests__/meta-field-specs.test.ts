@@ -14,7 +14,7 @@ import {
 
 describe('meta-field-specs', () => {
   it('keeps the maintained DOM core list small and explicit', () => {
-    expect(getMetaDomFieldPaths()).toHaveLength(18);
+    expect(getMetaDomFieldPaths()).toHaveLength(30);
     expect(getMetaFieldPathsForTier('core')).toEqual(getMetaDomFieldPaths());
   });
 
@@ -28,7 +28,7 @@ describe('meta-field-specs', () => {
 
   it('builds specs with tier, entity level, and extraction metadata', () => {
     expect(getMetaFieldTier('campaign.name')).toBe('core');
-    expect(getMetaFieldTier('campaign.buying_type')).toBe('experimental');
+    expect(getMetaFieldTier('campaign.buying_type')).toBe('core');
 
     expect(getMetaFieldSpec('campaign.name')).toEqual({
       fieldPath: 'campaign.name',

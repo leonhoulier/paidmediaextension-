@@ -885,12 +885,75 @@ export function getUrlParameters(): string | null {
 
 /**
  * Extract beneficiary and payer (EU DSA compliance).
- * 2026 DOM: combobox near "Beneficiary and payer" heading.
+ * 2026 DOM: switch with aria-label "The advertiser and payer are different"
+ * near "Beneficiary and payer" heading. Falls back to combobox.
  */
-export function getBeneficiaryPayer(): string | null {
+export function getBeneficiaryPayer(): boolean | string | null {
+  // Primary: switch element
+  const sw = findElementNearHeading('Beneficiary and payer', '[role="switch"]')
+    ?? document.querySelector<HTMLElement>('[role="switch"][aria-label*="advertiser and payer" i]');
+  if (sw) {
+    return sw.getAttribute('aria-checked') === 'true';
+  }
+  // Fallback: combobox
   const combo = findElementNearHeading('Beneficiary and payer', '[role="combobox"]');
   const text = combo?.textContent?.trim();
   if (text && !text.toLowerCase().includes('select a person')) return text;
+  return null;
+}
+
+/**
+ * Extract the Facebook Page in ad set level.
+ * 2026 DOM: input near "Facebook Page" heading with page name value.
+ */
+export function getAdSetFacebookPage(): string | null {
+  const input = findElementNearHeading('Facebook Page', 'input');
+  if (input && (input as HTMLInputElement).value) {
+    return (input as HTMLInputElement).value;
+  }
+  // Fallback: combobox near "Facebook Page" heading
+  const combo = findElementNearHeading('Facebook Page', '[role="combobox"]');
+  if (combo) {
+    const text = combo.textContent?.trim();
+    if (text && text.length < 80) return text;
+  }
+  return null;
+}
+
+/**
+ * Extract the campaign bid strategy.
+ * 2026 DOM: text near "Campaign bid strategy" heading (e.g. "Highest volume").
+ */
+export function getCampaignBidStrategy(): string | null {
+  const headings = document.querySelectorAll<HTMLElement>('[role="heading"], h2, h3, h4');
+  for (const h of headings) {
+    if (h.textContent?.toLowerCase().includes('bid strategy')) {
+      const sibling = h.nextElementSibling || h.parentElement?.nextElementSibling;
+      if (sibling) {
+        const text = (sibling as HTMLElement).textContent?.trim();
+        if (text && text.length < 100) return text;
+      }
+    }
+  }
+  // Fallback: combobox near bid strategy heading
+  const combo = findElementNearHeading('Campaign bid strategy', '[role="combobox"]');
+  if (combo) return combo.textContent?.trim() || null;
+  // Broader fallback
+  const combo2 = findElementNearHeading('Bid strategy', '[role="combobox"]');
+  if (combo2) return combo2.textContent?.trim() || null;
+  return null;
+}
+
+/**
+ * Extract the ad creative format.
+ * 2026 DOM: combobox with "Create ad" text near "Ad setup" heading.
+ */
+export function getAdCreativeFormat(): string | null {
+  const combo = findElementNearHeading('Ad setup', '[role="combobox"]');
+  if (combo) return combo.textContent?.trim() || null;
+  // Fallback: combobox near "Format" heading
+  const combo2 = findElementNearHeading('Format', '[role="combobox"]');
+  if (combo2) return combo2.textContent?.trim() || null;
   return null;
 }
 
@@ -909,6 +972,7 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'campaign.buying_type': getCampaignBuyingType,
   'campaign.special_ad_categories': getCampaignSpecialAdCategories,
   'campaign.a_b_test': getCampaignABTest,
+  'campaign.bid_strategy': getCampaignBidStrategy,
   // Ad set level
   'ad_set.name': getAdSetName,
   'ad_set.conversion_location': getConversionLocation,
@@ -924,6 +988,7 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'ad_set.schedule.start_date': getScheduleStartDate,
   'ad_set.schedule.end_date': getScheduleEndDate,
   'ad_set.beneficiary_payer': getBeneficiaryPayer,
+  'ad_set.facebook_page': getAdSetFacebookPage,
   // Ad level
   'ad.name': getAdName,
   'ad.partnership_ad': getPartnershipAd,
@@ -931,6 +996,7 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'ad.creative.cta_type': getCTAType,
   'ad.creative.page_id': getPageId,
   'ad.creative.instagram_account': getInstagramAccount,
+  'ad.creative.format': getAdCreativeFormat,
   'ad.tracking.url_parameters': getUrlParameters,
   // Aliases: backend rules use these field paths
   'ad.facebook_page_id': getPageId,

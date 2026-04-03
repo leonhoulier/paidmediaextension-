@@ -42,6 +42,18 @@ const META_DOM_PRIMARY_FIELD_PATHS = [
   'ad.creative.destination_url',
   'ad.creative.cta_type',
   'ad.creative.page_id',
+  'campaign.buying_type',
+  'campaign.special_ad_categories',
+  'campaign.a_b_test',
+  'campaign.bid_strategy',
+  'ad_set.performance_goal',
+  'ad_set.bid_amount',
+  'ad_set.beneficiary_payer',
+  'ad_set.facebook_page',
+  'ad.partnership_ad',
+  'ad.creative.instagram_account',
+  'ad.creative.format',
+  'ad.tracking.url_parameters',
 ] as const;
 
 const META_DOM_ALIAS_FIELD_PATHS = {
@@ -91,6 +103,9 @@ const META_REQUIRE_FIELD_MAP: Record<string, MetaRequireFieldMapping> = {
   'ad_set.attribution_setting': { store: 'AdsEditorDataStore', path: 'attributionSetting' },
   'ad_set.advantage_targeting': { store: 'AdsTargetingDataStore', path: 'advantageTargeting' },
   'ad_set.advantage_placements': { store: 'AdsEditorDataStore', path: 'advantagePlacements' },
+  'ad_set.performance_goal': { store: 'AdsEditorDataStore', path: 'performanceGoal' },
+  'ad_set.beneficiary_payer': { store: 'AdsEditorDataStore', path: 'beneficiaryPayer' },
+  'ad_set.facebook_page': { store: 'AdsEditorDataStore', path: 'facebookPage' },
 
   'ad.name': { store: 'AdsCreativeEditorDataStore', path: 'adName' },
   'ad.creative.destination_url': { store: 'AdsCreativeEditorDataStore', path: 'destinationUrl' },
@@ -122,6 +137,7 @@ const META_REQUIRE_FIELD_MAP: Record<string, MetaRequireFieldMapping> = {
   'ad.creative.branded_content_sponsor_id': { store: 'AdsCreativeEditorDataStore', path: 'brandedContentSponsorId' },
   'ad.creative.advantage_creative_enhancements': { store: 'AdsCreativeEditorDataStore', path: 'advantageCreativeEnhancements' },
 
+  'ad.partnership_ad': { store: 'AdsCreativeEditorDataStore', path: 'partnershipAd' },
   'ad.tracking.pixel_id': { store: 'AdsCreativeEditorDataStore', path: 'trackingPixelId' },
   'ad.tracking.app_events': { store: 'AdsCreativeEditorDataStore', path: 'appEvents' },
   'ad.tracking.offline_event_set_id': { store: 'AdsCreativeEditorDataStore', path: 'offlineEventSetId' },
@@ -166,6 +182,22 @@ const META_REMOTE_EVAL_CONFIG_MAP: Record<string, MetaRemoteEvalConfig> = {
     selector: '[role="switch"][aria-label*="budget" i], [role="switch"], input[type="checkbox"][aria-label*="budget" i], input[type="checkbox"][aria-label*="Advantage" i]',
     method: 'elementChecked',
   },
+  'campaign.buying_type': {
+    selector: '[role="combobox"]',
+    method: 'selectedOptionText',
+  },
+  'campaign.special_ad_categories': {
+    selector: '[role="combobox"]',
+    method: 'selectedOptionText',
+  },
+  'campaign.a_b_test': {
+    selector: '[role="switch"]',
+    method: 'elementChecked',
+  },
+  'campaign.bid_strategy': {
+    selector: '[role="combobox"]',
+    method: 'selectedOptionText',
+  },
 
   'ad_set.name': {
     selector: 'input[placeholder*="ad set name" i]',
@@ -208,12 +240,28 @@ const META_REMOTE_EVAL_CONFIG_MAP: Record<string, MetaRemoteEvalConfig> = {
     method: 'FindReact',
   },
   'ad_set.schedule.start_date': {
-    selector: '[aria-label*="Start date"]',
-    method: 'elementText',
+    selector: 'input[placeholder="mm/dd/yyyy"]',
+    method: 'elementValue',
   },
   'ad_set.schedule.end_date': {
-    selector: '[aria-label*="End date"]',
-    method: 'elementText',
+    selector: 'input[placeholder="mm/dd/yyyy"]',
+    method: 'elementValue',
+  },
+  'ad_set.performance_goal': {
+    selector: '[role="combobox"]',
+    method: 'selectedOptionText',
+  },
+  'ad_set.bid_amount': {
+    selector: 'input[placeholder="X.XXX"]',
+    method: 'elementValue',
+  },
+  'ad_set.beneficiary_payer': {
+    selector: '[role="switch"][aria-label*="advertiser and payer" i]',
+    method: 'elementChecked',
+  },
+  'ad_set.facebook_page': {
+    selector: 'input',
+    method: 'elementValue',
   },
 
   'ad.name': {
@@ -233,12 +281,28 @@ const META_REMOTE_EVAL_CONFIG_MAP: Record<string, MetaRemoteEvalConfig> = {
     method: 'selectedOptionText',
   },
   'ad.creative.page_id': {
-    selector: 'input[placeholder*="page" i]',
-    method: 'FindReact',
+    selector: '[role="combobox"]',
+    method: 'selectedOptionText',
   },
   'ad.facebook_page_id': {
-    selector: 'input[placeholder*="page" i]',
-    method: 'FindReact',
+    selector: '[role="combobox"]',
+    method: 'selectedOptionText',
+  },
+  'ad.partnership_ad': {
+    selector: '[role="switch"]',
+    method: 'elementChecked',
+  },
+  'ad.creative.instagram_account': {
+    selector: '[role="combobox"][aria-label="Instagram account"]',
+    method: 'selectedOptionText',
+  },
+  'ad.creative.format': {
+    selector: '[role="combobox"]',
+    method: 'selectedOptionText',
+  },
+  'ad.tracking.url_parameters': {
+    selector: 'input[placeholder*="key1=value1"]',
+    method: 'elementValue',
   },
 };
 
