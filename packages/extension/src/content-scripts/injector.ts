@@ -266,32 +266,45 @@ async function runEvaluation(preExtractedValues?: Record<string, unknown>): Prom
     console.log(`[VALIDATION] 📊 Field values: ${nonNullFields.length} non-null of ${Object.keys(fieldValues).length} total`);
     nonNullFields.forEach(([k, v]) => console.log(`[VALIDATION]   ${k}: ${JSON.stringify(v)?.substring(0, 100)}`));
 
-    // bestFieldValues tracks the latest known field state.
-    // When extraction returns null for a key that previously had a value,
-    // the cached value is CLEARED so the evaluator sees the actual current state.
+    // bestFieldValues is a cross-panel cache that persists field values
+    // across Meta Ads Manager panel switches (Campaign / Ad Set / Ad).
+    //
+    // When the user switches panels, fields from the previous panel disappear
+    // from the DOM and extraction returns null for them. Instead of clearing
+    // those values, we KEEP the cached value so rules can still evaluate.
+    //
+    // Only a non-null extraction result overwrites the cache. Null means
+    // "not in DOM right now", NOT "field is empty". Explicitly empty values
+    // (empty string, 0, false) are non-null and DO update the cache.
     if (!bestFieldValues) {
       bestFieldValues = {};
     }
 
-    // Clear keys that are now null (field was removed or extraction failed)
-    for (const key of Object.keys(bestFieldValues)) {
-      if (!(key in fieldValues)) {
-        delete bestFieldValues[key];
-      }
-    }
-    // Merge non-null values; delete keys that are explicitly null/undefined
+    // Merge: non-null extraction values update cache; null values fall back to cache
+    let cachedFieldsUsed = 0;
     for (const [k, v] of Object.entries(fieldValues)) {
       if (v !== null && v !== undefined) {
+        // Fresh non-null value from DOM — update cache
         bestFieldValues[k] = v;
-      } else {
-        delete bestFieldValues[k];
+      } else if (k in bestFieldValues && bestFieldValues[k] !== null && bestFieldValues[k] !== undefined) {
+        // Field returned null but cache has a value — keep cached (cross-panel)
+        cachedFieldsUsed++;
+        console.log(`[CACHE] Using cached value for ${k} (not in current DOM panel)`);
       }
+      // If both extraction and cache are null, field genuinely not extracted yet
     }
 
     // USE bestFieldValues as THE field values for evaluation — not the current extraction
-    fieldValues = { ...fieldValues }; // keep all keys
+    // Start with all extracted keys (preserves the key set), then overlay cached values
+    fieldValues = { ...fieldValues };
     for (const [k, v] of Object.entries(bestFieldValues)) {
-      fieldValues[k] = v;
+      if (v !== null && v !== undefined) {
+        fieldValues[k] = v;
+      }
+    }
+
+    if (cachedFieldsUsed > 0) {
+      console.log(`[CACHE] Used ${cachedFieldsUsed} cached cross-panel field value(s)`);
     }
 
     const bestCount = Object.values(bestFieldValues).filter(v => v !== null && v !== undefined).length;

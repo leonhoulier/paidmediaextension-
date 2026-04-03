@@ -449,12 +449,30 @@ export class MetaAdapter implements PlatformAdapter {
       const context = this.detectContext();
       const activeEntityLevel = context?.entityLevel ?? this.currentEntityLevel;
       this.currentEntityLevel = activeEntityLevel;
-      console.log('[EXTRACTION] 🔄 Starting field extraction...');
-      const values = await extractAllFieldValues(activeEntityLevel);
-      console.log(`[EXTRACTION] ✅ Extracted ${Object.keys(values).length} fields`);
-      this.fieldValues = { ...values };
+      console.log('[EXTRACTION] Starting field extraction...');
+      const freshValues = await extractAllFieldValues(activeEntityLevel);
+
+      // Cross-panel merge: retain cached values for fields not in current DOM panel
+      const mergedValues: Record<string, unknown> = {};
+      const allKeys = new Set([...Object.keys(freshValues), ...Object.keys(this.fieldValues)]);
+      let cachedCount = 0;
+      for (const key of allKeys) {
+        const freshValue = freshValues[key];
+        if (freshValue !== null && freshValue !== undefined) {
+          mergedValues[key] = freshValue;
+        } else if (this.fieldValues[key] !== null && this.fieldValues[key] !== undefined) {
+          mergedValues[key] = this.fieldValues[key];
+          cachedCount++;
+        } else {
+          mergedValues[key] = freshValue ?? null;
+        }
+      }
+
+      const freshNonNull = Object.values(freshValues).filter(v => v !== null && v !== undefined).length;
+      console.log(`[EXTRACTION] Extracted ${freshNonNull} fresh fields, retained ${cachedCount} cached cross-panel fields`);
+      this.fieldValues = { ...mergedValues };
       this.lastExtractionTimestamp = Date.now();
-      return values;
+      return mergedValues;
     } catch (error) {
       console.error('[EXTRACTION] ❌ Field extraction failed:', error);
       // Return cached values on error (better than throwing)
@@ -593,14 +611,31 @@ export class MetaAdapter implements PlatformAdapter {
       try {
         const newValues = await this.extractFieldValues();
 
+        // Cross-panel merge: DOM non-null values win, DOM null values fall back
+        // to the adapter's cached fieldValues from previous extractions.
+        // This ensures fields from other panels (Campaign/Ad Set/Ad) are retained.
+        const mergedValues: Record<string, unknown> = {};
+        const allKeys = new Set([...Object.keys(newValues), ...Object.keys(this.fieldValues)]);
+        for (const key of allKeys) {
+          const freshValue = newValues[key];
+          if (freshValue !== null && freshValue !== undefined) {
+            mergedValues[key] = freshValue;
+          } else if (this.fieldValues[key] !== null && this.fieldValues[key] !== undefined) {
+            // Keep previously cached value (field not in current DOM panel)
+            mergedValues[key] = this.fieldValues[key];
+          } else {
+            mergedValues[key] = freshValue ?? null;
+          }
+        }
+
         const changedFields: string[] = [];
-        for (const [field, value] of Object.entries(newValues)) {
+        for (const [field, value] of Object.entries(mergedValues)) {
           if (!deepEqual(value, this.fieldValues[field])) {
             changedFields.push(field);
           }
         }
 
-        this.fieldValues = { ...newValues };
+        this.fieldValues = { ...mergedValues };
 
         // MutationObserver path: only re-evaluate if fields actually changed
         // (prevents infinite loop from our own UI mutations).
@@ -609,7 +644,7 @@ export class MetaAdapter implements PlatformAdapter {
 
         if (shouldEval) {
           this.initialValidationComplete = true;
-          callback('__all__', newValues);
+          callback('__all__', mergedValues);
         }
       } catch (error) {
         console.error('[INPUT-CHANGE] ❌ Error during field change detection:', error);
