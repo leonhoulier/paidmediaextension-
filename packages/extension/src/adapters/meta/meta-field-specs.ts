@@ -54,6 +54,16 @@ const META_DOM_PRIMARY_FIELD_PATHS = [
   'ad.creative.instagram_account',
   'ad.creative.format',
   'ad.tracking.url_parameters',
+  // Ad creative text fields (2026 Ad panel)
+  'ad.creative.primary_text',
+  'ad.creative.headline',
+  'ad.creative.description',
+  'ad.creative.display_link',
+  'ad.creative.cta_type_label',
+  'ad.creative.format_radio',
+  'ad.creative.destination_type',
+  'ad.creative.flexible_media',
+  'ad.creative.add_music',
 ] as const;
 
 const META_DOM_ALIAS_FIELD_PATHS = {

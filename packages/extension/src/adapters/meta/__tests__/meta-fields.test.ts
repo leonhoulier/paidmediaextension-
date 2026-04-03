@@ -872,9 +872,9 @@ describe('getSupportedFieldPaths()', () => {
 });
 
 describe('getDomFieldPaths()', () => {
-  it('should return exactly 18 DOM field paths', () => {
+  it('should return exactly 39 DOM field paths', () => {
     const paths = getDomFieldPaths();
-    expect(paths.length).toBe(18);
+    expect(paths.length).toBe(39);
   });
 });
 

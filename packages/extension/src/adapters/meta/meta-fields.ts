@@ -840,11 +840,17 @@ export function getPartnershipAd(): boolean | null {
 
 /**
  * Extract the destination URL.
- * 2026 DOM: `<input placeholder="Enter the URL you want to promote">`
+ * 2026 DOM: `<input placeholder="http://www.example.com/page">` or
+ *           `<input placeholder="Enter the URL you want to promote">`
  */
 export function getDestinationUrl(): string | null {
-  const el = document.querySelector<HTMLInputElement>('input[placeholder*="Enter the URL" i]');
+  // Primary: placeholder with example.com (current 2026 DOM)
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="example.com" i]');
   if (el?.value) return el.value;
+
+  // Fallback: older placeholder variant
+  const el2 = document.querySelector<HTMLInputElement>('input[placeholder*="Enter the URL" i]');
+  if (el2?.value) return el2.value;
 
   const nearHeading = findElementNearHeading('Website URL', 'input');
   if (nearHeading && (nearHeading as HTMLInputElement).value) {
@@ -968,6 +974,149 @@ export function getAdCreativeFormat(): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Ad Creative Field Getters (2026 Meta Ads Manager — Ad panel)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the primary text (ad copy).
+ * 2026 DOM: first `<textarea>` on the page.
+ */
+export function getAdPrimaryText(): string | null {
+  const textareas = document.querySelectorAll('textarea');
+  return textareas[0]?.value || null;
+}
+
+/**
+ * Extract the headline (ad copy).
+ * 2026 DOM: second `<textarea>` on the page.
+ */
+export function getAdHeadline(): string | null {
+  const textareas = document.querySelectorAll('textarea');
+  return textareas[1]?.value || null;
+}
+
+/**
+ * Extract the description (ad copy).
+ * 2026 DOM: third `<textarea>` on the page.
+ */
+export function getAdDescription(): string | null {
+  const textareas = document.querySelectorAll('textarea');
+  return textareas[2]?.value || null;
+}
+
+/**
+ * Extract the ad-level destination URL (creative section).
+ * 2026 DOM: `<input placeholder="http://www.example.com/page">`.
+ * This delegates to `getDestinationUrl()` which already uses the same selector.
+ */
+export function getAdDestinationUrl(): string | null {
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="example.com" i]');
+  return el?.value || null;
+}
+
+/**
+ * Extract the display link.
+ * 2026 DOM: `<input placeholder="...link you want to show...">`.
+ */
+export function getAdDisplayLink(): string | null {
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="link you want to show" i]');
+  return el?.value || null;
+}
+
+/**
+ * Known CTA label values in Meta Ads Manager.
+ */
+const KNOWN_CTA_LABELS = [
+  'Learn more', 'Shop now', 'Sign up', 'Download', 'Apply now',
+  'Book now', 'Contact us', 'Get quote', 'Subscribe', 'Watch more',
+  'Send message', 'Get offer', 'See menu', 'No button',
+];
+
+/**
+ * Extract the CTA (Call to Action) type from the combobox.
+ * 2026 DOM: `[role="combobox"]` whose text matches a known CTA label,
+ * or the combobox nearest the "Call to action" heading.
+ */
+export function getAdCTAType(): string | null {
+  // Strategy 1: scan all comboboxes for known CTA text
+  const combos = document.querySelectorAll<HTMLElement>('[role="combobox"]');
+  for (const combo of combos) {
+    const text = combo.textContent?.trim();
+    if (text && KNOWN_CTA_LABELS.some(cta => text.includes(cta))) {
+      return text;
+    }
+  }
+  // Strategy 2: find combobox near "Call to action" heading
+  return findElementNearHeading('call to action', '[role="combobox"]')?.textContent?.trim() || null;
+}
+
+/**
+ * Extract the ad creative format via radio buttons.
+ * 2026 DOM: radio group with options SINGLE / MULTIPLE / COLLECTIONS.
+ */
+export function getAdFormat(): string | null {
+  const radios = document.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+  for (const radio of radios) {
+    if (radio.checked) {
+      const val = radio.value?.toUpperCase();
+      if (['SINGLE', 'MULTIPLE', 'COLLECTIONS'].includes(val)) {
+        return val;
+      }
+      // Fallback: check label text
+      const label = radio.closest('label')?.textContent?.trim().toUpperCase();
+      if (label && ['SINGLE', 'MULTIPLE', 'COLLECTIONS'].some(f => label.includes(f))) {
+        return label;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the destination type via radio buttons.
+ * 2026 DOM: radio group with options like "external" / "instant_experience".
+ */
+export function getAdDestinationType(): string | null {
+  const radios = document.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+  for (const radio of radios) {
+    if (radio.checked) {
+      const val = radio.value?.toLowerCase();
+      if (['external', 'instant_experience'].includes(val)) {
+        return val;
+      }
+    }
+  }
+  // Fallback: near "Destination" heading
+  const label = findElementNearHeading('Destination', 'label:has(input[type="radio"]:checked)');
+  return label?.textContent?.trim().toLowerCase() || null;
+}
+
+/**
+ * Extract the flexible media toggle state.
+ * 2026 DOM: `[role="switch"]` near "Flexible media" heading.
+ */
+export function getAdFlexibleMedia(): boolean | null {
+  const sw = findElementNearHeading('flexible media', '[role="switch"]');
+  if (!sw) return null;
+  return sw.getAttribute('aria-checked') === 'true';
+}
+
+/**
+ * Extract the "Add music" checkbox state.
+ * 2026 DOM: `input[type="checkbox"]` near "Add music" text.
+ */
+export function getAdAddMusic(): boolean | null {
+  const cb = findElementNearHeading('add music', 'input[type="checkbox"]') as HTMLInputElement | null;
+  if (!cb) {
+    // Fallback: look for a role="checkbox" element
+    const roleCb = findElementNearHeading('add music', '[role="checkbox"]');
+    if (roleCb) return roleCb.getAttribute('aria-checked') === 'true';
+    return null;
+  }
+  return cb.checked;
+}
+
+// ---------------------------------------------------------------------------
 // Aggregated Extraction
 // ---------------------------------------------------------------------------
 
@@ -1009,6 +1158,21 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'ad.creative.instagram_account': getInstagramAccount,
   'ad.creative.format': getAdCreativeFormat,
   'ad.tracking.url_parameters': getUrlParameters,
+  // Ad creative text fields
+  'ad.creative.primary_text': getAdPrimaryText,
+  'ad.creative.headline': getAdHeadline,
+  'ad.creative.description': getAdDescription,
+  // Ad creative URL fields
+  'ad.creative.display_link': getAdDisplayLink,
+  // Ad creative CTA (matches known CTA labels)
+  'ad.creative.cta_type_label': getAdCTAType,
+  // Ad creative format (radio: SINGLE / MULTIPLE / COLLECTIONS)
+  'ad.creative.format_radio': getAdFormat,
+  // Ad destination type (radio: external / instant_experience)
+  'ad.creative.destination_type': getAdDestinationType,
+  // Ad creative toggles
+  'ad.creative.flexible_media': getAdFlexibleMedia,
+  'ad.creative.add_music': getAdAddMusic,
   // Aliases: backend rules use these field paths
   'ad.facebook_page_id': getPageId,
   'ad.destination_url': getDestinationUrl,
