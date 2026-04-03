@@ -64,6 +64,32 @@ const META_DOM_PRIMARY_FIELD_PATHS = [
   'ad.creative.destination_type',
   'ad.creative.flexible_media',
   'ad.creative.add_music',
+  // Objective-specific fields (Engagement, Sales, Leads)
+  'ad_set.engagement_type',
+  'ad_set.frequency_control',
+  'ad_set.cost_per_result_goal',
+  'campaign.advantage_plus_sales',
+  'campaign.advantage_plus_catalog',
+  'campaign.advantage_plus_leads',
+  'ad_set.dynamic_creative',
+  'ad_set.audience_type',
+  'ad_set.detailed_targeting',
+  // Brand safety & inventory filters
+  'ad_set.inventory_in_content_ads',
+  'ad_set.inventory_audience_network',
+  'ad_set.publisher_block_lists',
+  'ad_set.content_type_exclusions',
+  'ad_set.topic_exclusions',
+  // Ad-level additional fields
+  'ad.creative.threads_profile',
+  'ad.creative.multi_advertiser_ads',
+  'ad.tracking.app_events',
+  'ad.languages',
+  // Delivery / Attribution / Dataset / Spending limit
+  'ad_set.delivery_type',
+  'ad_set.attribution_model',
+  'ad_set.dataset',
+  'campaign.spending_limit',
 ] as const;
 
 const META_DOM_ALIAS_FIELD_PATHS = {

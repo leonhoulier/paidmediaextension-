@@ -14,7 +14,7 @@ import {
 
 describe('meta-field-specs', () => {
   it('keeps the maintained DOM core list small and explicit', () => {
-    expect(getMetaDomFieldPaths()).toHaveLength(30);
+    expect(getMetaDomFieldPaths()).toHaveLength(61);
     expect(getMetaFieldPathsForTier('core')).toEqual(getMetaDomFieldPaths());
   });
 

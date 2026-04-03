@@ -1117,6 +1117,298 @@ export function getAdAddMusic(): boolean | null {
 }
 
 // ---------------------------------------------------------------------------
+// Ad-Level Additional Getters
+// ---------------------------------------------------------------------------
+
+/**
+ * Find a nearby interactive element using a span/div label (not a heading).
+ * 2026 DOM: some labels are `<span>` not `[role="heading"]`.
+ */
+function findElementNearLabel(
+  labelText: string,
+  childSelector: string,
+  maxLevels: number = 8,
+): HTMLElement | null {
+  const all = document.querySelectorAll<HTMLElement>('span, div');
+  for (const el of all) {
+    // Match own text only
+    if (el.children.length > 2) continue;
+    if (!el.textContent?.trim().toLowerCase().includes(labelText.toLowerCase())) continue;
+    if (el.textContent.trim().length > labelText.length + 20) continue;
+    let container: HTMLElement | null = el.parentElement;
+    for (let i = 0; i < maxLevels && container; i++) {
+      const match = container.querySelector<HTMLElement>(childSelector);
+      if (match) return match;
+      container = container.parentElement;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the Threads profile selection.
+ * 2026 DOM: combobox near "Threads profile" span.
+ */
+export function getThreadsProfile(): string | null {
+  const combo = findElementNearLabel('Threads profile', '[role="combobox"]');
+  const text = combo?.textContent?.trim() || null;
+  if (!text || text === 'Select a Threads profile') return null;
+  return text;
+}
+
+/**
+ * Extract the multi-advertiser ads checkbox state.
+ * 2026 DOM: checkbox near "Multi-advertiser ads" span.
+ */
+export function getMultiAdvertiserAds(): boolean | null {
+  const cb = findElementNearLabel('Multi-advertiser ads', 'input[type="checkbox"]') as HTMLInputElement | null;
+  if (cb) return cb.checked;
+  const roleCb = findElementNearLabel('Multi-advertiser ads', '[role="checkbox"]');
+  if (roleCb) return roleCb.getAttribute('aria-checked') === 'true';
+  return null;
+}
+
+/**
+ * Extract the app events tracking checkbox state.
+ * 2026 DOM: checkbox near "App events" div.
+ */
+export function getAppEvents(): boolean | null {
+  const cb = findElementNearLabel('App events', 'input[type="checkbox"]') as HTMLInputElement | null;
+  if (cb) return cb.checked;
+  return null;
+}
+
+/**
+ * Extract the ad languages switch state.
+ * 2026 DOM: switch near "Languages" heading.
+ */
+export function getAdLanguages(): boolean | null {
+  const sw = findElementNearHeading('Languages', '[role="switch"]');
+  if (sw) return sw.getAttribute('aria-checked') === 'true';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Objective-Specific Field Getters (Engagement, Sales, Leads)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the engagement type from the ad set panel.
+ * 2026 DOM: `[role="combobox"]` near "Engagement type" heading (e.g. "Video views").
+ */
+export function getEngagementType(): string | null {
+  return findElementNearHeading('engagement type', '[role="combobox"]')?.textContent?.trim() || null;
+}
+
+/**
+ * Extract the frequency control checkbox state.
+ * 2026 DOM: `input[type="checkbox"]` near heading containing "frequency".
+ */
+export function getFrequencyControl(): boolean | null {
+  const headings = document.querySelectorAll('[role="heading"], h3, h4');
+  for (const h of headings) {
+    if (h.textContent?.toLowerCase().includes('frequency')) {
+      const checkbox = h.parentElement?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+      if (checkbox) return checkbox.checked;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the cost per result goal (bid textbox).
+ * 2026 DOM: `input[aria-label="Bid"]` or textbox with aria-label "Bid".
+ */
+export function getCostPerResultGoal(): string | null {
+  const el = document.querySelector<HTMLInputElement>('[role="textbox"][aria-label="Bid"], input[aria-label="Bid"]');
+  return el?.value || null;
+}
+
+/**
+ * Extract the Advantage+ sales or leads campaign toggle state.
+ * 2026 DOM: button containing "Advantage+" and "sales"/"leads" with "On"/"Off" text.
+ */
+export function getAdvantagePlusCampaign(): boolean | null {
+  const buttons = document.querySelectorAll('button');
+  for (const btn of buttons) {
+    const text = btn.textContent?.trim();
+    if (text?.includes('Advantage+') && (text?.includes('sales') || text?.includes('leads'))) {
+      return text.includes('On');
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the Advantage+ catalog ads toggle state.
+ * 2026 DOM: `[role="switch"]` near "catalog ads" heading.
+ */
+export function getAdvantagePlusCatalog(): boolean | null {
+  const sw = findElementNearHeading('catalog ads', '[role="switch"]');
+  if (!sw) return null;
+  return sw.getAttribute('aria-checked') === 'true';
+}
+
+/**
+ * Extract the dynamic creative toggle state.
+ * 2026 DOM: `[role="switch"]` near "Dynamic creative" heading.
+ */
+export function getDynamicCreative(): boolean | null {
+  const sw = findElementNearHeading('dynamic creative', '[role="switch"]');
+  if (!sw) return null;
+  return sw.getAttribute('aria-checked') === 'true';
+}
+
+/**
+ * Extract the audience type text.
+ * 2026 DOM: text near "Advantage+ audience" or "Audience controls" heading.
+ */
+export function getAudienceType(): string | null {
+  const summary = readSummaryTextNearHeading('Advantage+ audience');
+  if (summary) return summary;
+  return readSummaryTextNearHeading('Audience controls');
+}
+
+/**
+ * Extract the detailed targeting input value.
+ * 2026 DOM: `input[placeholder*="demographics" i]`.
+ */
+export function getDetailedTargeting(): string | null {
+  const el = document.querySelector<HTMLInputElement>('input[placeholder*="demographics" i]');
+  return el?.value || null;
+}
+
+// ---------------------------------------------------------------------------
+// Delivery / Attribution / Dataset Getters
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the delivery type from the ad set panel.
+ * 2026 DOM: combobox showing "Standard" near "Delivery" heading.
+ * Only appears for Traffic, Leads, Sales objectives.
+ */
+export function getDeliveryType(): string | null {
+  // The "Standard" combobox is typically the 4th combobox on the ad set panel
+  // Look near a heading containing "Delivery" or by matching known values
+  const combo = findElementNearHeading('Delivery', '[role="combobox"]');
+  if (combo) return combo.textContent?.trim() || null;
+  // Fallback: scan all comboboxes for known delivery type values
+  const combos = document.querySelectorAll('[role="combobox"]');
+  for (const c of combos) {
+    const t = c.textContent?.trim();
+    if (t === 'Standard' || t === 'Accelerated') return t;
+  }
+  return null;
+}
+
+/**
+ * Extract the attribution model from the ad set panel.
+ * 2026 DOM: near "Attribution model" heading, value like "Standard".
+ * Only appears for Sales objective.
+ */
+export function getAttributionModel(): string | null {
+  return readSummaryTextNearHeading('Attribution model');
+}
+
+/**
+ * Extract the dataset (formerly Pixel) requirement status.
+ * 2026 DOM: "* Dataset" heading — checks if a dataset is configured or still required.
+ * Only appears for Sales objective.
+ */
+export function getDataset(): string | null {
+  // Look for combobox near "Dataset" heading
+  const combo = findElementNearHeading('Dataset', '[role="combobox"]');
+  if (combo) return combo.textContent?.trim() || null;
+  // Check if dataset section exists but is unconfigured
+  const heading = readSummaryTextNearHeading('Dataset');
+  if (heading) return heading;
+  // Fallback: check for the info text
+  const body = document.body.innerText;
+  if (body.includes('dataset (formerly known as Pixel) is required')) return 'REQUIRED_NOT_SET';
+  return null;
+}
+
+/**
+ * Extract the campaign spending limit.
+ * 2026 DOM: text near "Campaign spending limit" — "None added" or a value.
+ * Appears for Leads and Sales objectives.
+ */
+export function getCampaignSpendingLimit(): string | null {
+  return readValueNearLabel('Campaign spending limit');
+}
+
+// ---------------------------------------------------------------------------
+// Brand Safety & Inventory Filter Getters
+// ---------------------------------------------------------------------------
+
+/**
+ * Read a value next to a label span in the Brand Safety / Inventory section.
+ * 2026 DOM: label is a `<span>` 4 levels deep inside a container div that also
+ * holds the value text (e.g. "Expanded (ad set)" or "None selected").
+ */
+function readValueNearLabel(labelText: string): string | null {
+  const spans = document.querySelectorAll<HTMLSpanElement>('span');
+  for (const span of spans) {
+    if (span.textContent?.trim() !== labelText || span.children.length > 0) continue;
+    let container: HTMLElement | null = span.parentElement;
+    for (let depth = 0; depth < 8 && container; depth++) {
+      const full = container.textContent?.trim() ?? '';
+      if (full.length > labelText.length + 3) {
+        const value = full
+          .replace(labelText, '')
+          .replace(/Edit/g, '')
+          .replace(/[​\u200B\s]+/g, ' ')
+          .trim();
+        return value || null;
+      }
+      container = container.parentElement;
+    }
+    break;
+  }
+  return null;
+}
+
+/**
+ * Inventory filter — In-content ads level.
+ * Values: "Expanded (ad set)" | "Standard" | "Limited"
+ */
+export function getInventoryInContentAds(): string | null {
+  return readValueNearLabel('In-content ads');
+}
+
+/**
+ * Inventory filter — Audience Network ads level.
+ * Values: "Expanded (ad set)" | "Standard" | "Limited"
+ */
+export function getInventoryAudienceNetwork(): string | null {
+  return readValueNearLabel('Audience Network ads');
+}
+
+/**
+ * Publisher block lists selection.
+ * Values: "None selected" or list names.
+ */
+export function getPublisherBlockLists(): string | null {
+  return readValueNearLabel('Publisher block lists');
+}
+
+/**
+ * Content type exclusions selection.
+ * Values: "None selected" or exclusion names.
+ */
+export function getContentTypeExclusions(): string | null {
+  return readValueNearLabel('Content type exclusions');
+}
+
+/**
+ * Topic exclusions selection.
+ * Values: "None selected" or topic names.
+ */
+export function getTopicExclusions(): string | null {
+  return readValueNearLabel('Topic exclusions');
+}
+
+// ---------------------------------------------------------------------------
 // Aggregated Extraction
 // ---------------------------------------------------------------------------
 
@@ -1132,6 +1424,9 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'campaign.special_ad_categories': getCampaignSpecialAdCategories,
   'campaign.a_b_test': getCampaignABTest,
   'campaign.bid_strategy': getCampaignBidStrategy,
+  'campaign.advantage_plus_sales': getAdvantagePlusCampaign,
+  'campaign.advantage_plus_leads': getAdvantagePlusCampaign,
+  'campaign.advantage_plus_catalog': getAdvantagePlusCatalog,
   // Ad set level
   'ad_set.name': getAdSetName,
   'ad_set.conversion_location': getConversionLocation,
@@ -1149,6 +1444,24 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'ad_set.schedule.end_date': getScheduleEndDate,
   'ad_set.beneficiary_payer': getBeneficiaryPayer,
   'ad_set.facebook_page': getAdSetFacebookPage,
+  // Objective-specific ad set fields
+  'ad_set.engagement_type': getEngagementType,
+  'ad_set.frequency_control': getFrequencyControl,
+  'ad_set.cost_per_result_goal': getCostPerResultGoal,
+  'ad_set.dynamic_creative': getDynamicCreative,
+  'ad_set.audience_type': getAudienceType,
+  'ad_set.detailed_targeting': getDetailedTargeting,
+  // Brand safety & inventory filters
+  'ad_set.inventory_in_content_ads': getInventoryInContentAds,
+  'ad_set.inventory_audience_network': getInventoryAudienceNetwork,
+  'ad_set.publisher_block_lists': getPublisherBlockLists,
+  'ad_set.content_type_exclusions': getContentTypeExclusions,
+  'ad_set.topic_exclusions': getTopicExclusions,
+  // Delivery / Attribution / Dataset
+  'ad_set.delivery_type': getDeliveryType,
+  'ad_set.attribution_model': getAttributionModel,
+  'ad_set.dataset': getDataset,
+  'campaign.spending_limit': getCampaignSpendingLimit,
   // Ad level
   'ad.name': getAdName,
   'ad.partnership_ad': getPartnershipAd,
@@ -1173,6 +1486,11 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   // Ad creative toggles
   'ad.creative.flexible_media': getAdFlexibleMedia,
   'ad.creative.add_music': getAdAddMusic,
+  // Ad-level additional fields
+  'ad.creative.threads_profile': getThreadsProfile,
+  'ad.creative.multi_advertiser_ads': getMultiAdvertiserAds,
+  'ad.tracking.app_events': getAppEvents,
+  'ad.languages': getAdLanguages,
   // Aliases: backend rules use these field paths
   'ad.facebook_page_id': getPageId,
   'ad.destination_url': getDestinationUrl,
