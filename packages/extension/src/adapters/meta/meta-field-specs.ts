@@ -90,6 +90,13 @@ const META_DOM_PRIMARY_FIELD_PATHS = [
   'ad_set.attribution_model',
   'ad_set.dataset',
   'campaign.spending_limit',
+  // Final sweep fields
+  'campaign.status',
+  'campaign.ad_scheduling',
+  'ad_set.schedule.start_time',
+  'ad_set.messaging_platforms',
+  'ad_set.excluded_placements',
+  'ad.creative.chat_greeting',
 ] as const;
 
 const META_DOM_ALIAS_FIELD_PATHS = {

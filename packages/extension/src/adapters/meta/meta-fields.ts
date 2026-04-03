@@ -601,6 +601,24 @@ export function getCampaignABTest(): boolean | null {
 }
 
 /**
+ * Extract the campaign status (On/Off toggle at top of campaign panel).
+ * 2026 DOM: first `[role="switch"][aria-label="On/off"]`.
+ */
+export function getCampaignStatus(): boolean | null {
+  const sw = document.querySelector<HTMLElement>('[role="switch"][aria-label="On/off"]');
+  if (sw) return sw.getAttribute('aria-checked') === 'true';
+  return null;
+}
+
+/**
+ * Extract the ad scheduling setting.
+ * 2026 DOM: text near "Ad scheduling" heading, e.g. "Run ads all the time".
+ */
+export function getAdScheduling(): string | null {
+  return readSummaryTextNearHeading('Ad scheduling');
+}
+
+/**
  * Extract the ad set name.
  * 2026 DOM: `<input placeholder="Enter your ad set name here...">`
  */
@@ -814,6 +832,48 @@ export function getScheduleEndDate(): string | null {
 }
 
 /**
+ * Extract schedule start time (hours:minutes meridiem).
+ * 2026 DOM: spinbutton inputs with aria-label "hours"/"minutes"/"meridiem".
+ */
+export function getScheduleStartTime(): string | null {
+  const hours = document.querySelector<HTMLInputElement>('input[aria-label="hours"]');
+  const minutes = document.querySelector<HTMLInputElement>('input[aria-label="minutes"]');
+  const meridiem = document.querySelector<HTMLInputElement>('input[aria-label="meridiem"]');
+  if (hours?.value && minutes?.value) {
+    return `${hours.value}:${minutes.value}${meridiem?.value ? ' ' + meridiem.value : ''}`;
+  }
+  return null;
+}
+
+/**
+ * Extract messaging platforms checkboxes (Messenger, Instagram, WhatsApp).
+ * 2026 DOM: checkboxes near "Messaging platforms" or "messaging apps" labels.
+ * Only appears when conversion location is "Message destinations".
+ */
+export function getMessagingPlatforms(): string[] | null {
+  const platforms: string[] = [];
+  const labels = ['Messenger', 'Instagram', 'WhatsApp'];
+  for (const label of labels) {
+    const cbs = document.querySelectorAll('input[type="checkbox"]');
+    for (const cb of cbs) {
+      const parentText = cb.closest('label')?.textContent?.trim() ?? '';
+      if (parentText.includes(label) && (cb as HTMLInputElement).checked) {
+        platforms.push(label);
+      }
+    }
+  }
+  return platforms.length > 0 ? platforms : null;
+}
+
+/**
+ * Extract excluded placements text.
+ * 2026 DOM: text near "Excluded placements" heading, e.g. "None".
+ */
+export function getExcludedPlacements(): string | null {
+  return readSummaryTextNearHeading('Excluded placements');
+}
+
+/**
  * Extract the ad name.
  * 2026 DOM: `<input placeholder="Enter your ad name here...">`
  */
@@ -897,6 +957,14 @@ export function getInstagramAccount(): string | null {
 export function getUrlParameters(): string | null {
   const el = document.querySelector<HTMLInputElement>('input[placeholder*="key1=value1"]');
   return el?.value || null;
+}
+
+/**
+ * Extract the chat greeting text (Messenger campaigns).
+ * 2026 DOM: text near "Greeting" heading.
+ */
+export function getChatGreeting(): string | null {
+  return readSummaryTextNearHeading('Greeting');
 }
 
 /**
@@ -1424,6 +1492,8 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'campaign.special_ad_categories': getCampaignSpecialAdCategories,
   'campaign.a_b_test': getCampaignABTest,
   'campaign.bid_strategy': getCampaignBidStrategy,
+  'campaign.status': getCampaignStatus,
+  'campaign.ad_scheduling': getAdScheduling,
   'campaign.advantage_plus_sales': getAdvantagePlusCampaign,
   'campaign.advantage_plus_leads': getAdvantagePlusCampaign,
   'campaign.advantage_plus_catalog': getAdvantagePlusCatalog,
@@ -1442,6 +1512,9 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'ad_set.placements': getPlacements,
   'ad_set.schedule.start_date': getScheduleStartDate,
   'ad_set.schedule.end_date': getScheduleEndDate,
+  'ad_set.schedule.start_time': getScheduleStartTime,
+  'ad_set.messaging_platforms': getMessagingPlatforms,
+  'ad_set.excluded_placements': getExcludedPlacements,
   'ad_set.beneficiary_payer': getBeneficiaryPayer,
   'ad_set.facebook_page': getAdSetFacebookPage,
   // Objective-specific ad set fields
@@ -1491,6 +1564,7 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   'ad.creative.multi_advertiser_ads': getMultiAdvertiserAds,
   'ad.tracking.app_events': getAppEvents,
   'ad.languages': getAdLanguages,
+  'ad.creative.chat_greeting': getChatGreeting,
   // Aliases: backend rules use these field paths
   'ad.facebook_page_id': getPageId,
   'ad.destination_url': getDestinationUrl,
