@@ -935,6 +935,11 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   // Aliases: backend rules use these field paths
   'ad.facebook_page_id': getPageId,
   'ad.destination_url': getDestinationUrl,
+  'campaign.daily_budget': getCampaignBudgetValue,
+  'campaign.lifetime_budget': getCampaignBudgetValue,
+  'campaign.geo_targets': getGeoLocations,
+  'ad_set.daily_budget': getCampaignBudgetValue,
+  'ad_set.lifetime_budget': getCampaignBudgetValue,
 };
 
 // ---------------------------------------------------------------------------
