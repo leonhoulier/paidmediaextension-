@@ -21,7 +21,7 @@ import { trackExtensionEvent } from '../instrumentation/posthog.js';
 
 // Initialize Sentry for content script context
 initSentryContentScript();
-import { evaluateRules, computeScore } from '../rules/evaluator.js';
+import { evaluateRules, computeScore, NOT_VISIBLE_SENTINEL } from '../rules/evaluator.js';
 import { createPlatformAdapter } from '../adapters/platform-adapter.js';
 import type { PlatformAdapter } from '@media-buying-governance/shared';
 import { RemoteEvalBatcher } from './remote-eval-batcher.js';
@@ -305,6 +305,29 @@ async function runEvaluation(preExtractedValues?: Record<string, unknown>): Prom
 
     if (cachedFieldsUsed > 0) {
       console.log(`[CACHE] Used ${cachedFieldsUsed} cached cross-panel field value(s)`);
+    }
+
+    // Mark fields that are null AND belong to a different entity level than
+    // the current panel with the NOT_VISIBLE sentinel. This tells the
+    // evaluator to return 'unknown' instead of 'failed' for IS_SET /
+    // IS_NOT_SET checks on cross-panel fields that were never extracted.
+    const currentContext = currentAdapter.detectContext();
+    const currentEntityLevel = currentContext?.entityLevel; // 'campaign' | 'ad_set' | 'ad'
+    if (currentEntityLevel) {
+      for (const k of Object.keys(fieldValues)) {
+        if (fieldValues[k] !== null && fieldValues[k] !== undefined) continue;
+        // Determine which entity level this field belongs to by its prefix
+        const fieldEntity = k.startsWith('campaign.')
+          ? 'campaign'
+          : k.startsWith('ad_set.')
+            ? 'ad_set'
+            : k.startsWith('ad.')
+              ? 'ad'
+              : null;
+        if (fieldEntity && fieldEntity !== currentEntityLevel) {
+          fieldValues[k] = NOT_VISIBLE_SENTINEL;
+        }
+      }
     }
 
     const bestCount = Object.values(bestFieldValues).filter(v => v !== null && v !== undefined).length;

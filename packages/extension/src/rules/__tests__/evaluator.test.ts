@@ -259,6 +259,44 @@ describe('evaluateRule() status field', () => {
     expect(typeof results[0].passed).toBe('boolean');
     expect(typeof results[0].status).toBe('string');
   });
+
+  it('__NOT_VISIBLE__ sentinel returns "unknown" for IS_SET', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.IS_SET, field: 'ad_set.name' },
+    });
+    const results = evaluateRules({ 'ad_set.name': '__NOT_VISIBLE__' }, [rule]);
+    expect(results[0].status).toBe('unknown');
+    expect(results[0].passed).toBe(false);
+    // The sentinel should not leak into the fieldValue result
+    expect(results[0].fieldValue).toBeUndefined();
+  });
+
+  it('__NOT_VISIBLE__ sentinel returns "unknown" for IS_NOT_SET', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.IS_NOT_SET, field: 'ad.partnership_ad' },
+    });
+    const results = evaluateRules({ 'ad.partnership_ad': '__NOT_VISIBLE__' }, [rule]);
+    expect(results[0].status).toBe('unknown');
+    expect(results[0].passed).toBe(false);
+  });
+
+  it('__NOT_VISIBLE__ sentinel returns "unknown" for EQUALS', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.EQUALS, field: 'ad.name', value: 'MyAd' },
+    });
+    const results = evaluateRules({ 'ad.name': '__NOT_VISIBLE__' }, [rule]);
+    expect(results[0].status).toBe('unknown');
+    expect(results[0].passed).toBe(false);
+  });
+
+  it('rule with no field condition returns "unknown"', () => {
+    const rule = makeRule({
+      condition: { operator: RuleOperator.CONTAINS, value: 'test' },
+    });
+    const results = evaluateRules({}, [rule]);
+    expect(results[0].status).toBe('unknown');
+    expect(results[0].passed).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -444,9 +482,10 @@ describe('Operators', () => {
       });
       expect(evaluateRules({ name: 'Campaign' }, [rule])[0].passed).toBe(true);
       expect(evaluateRules({ name: 0 }, [rule])[0].passed).toBe(true);
+      expect(evaluateRules({ name: true }, [rule])[0].passed).toBe(true);
     });
 
-    it('null/undefined/empty string/empty array fail', () => {
+    it('null/undefined/empty string/empty array/false fail', () => {
       const rule = makeRule({
         condition: { operator: RuleOperator.IS_SET, field: 'name' },
       });
@@ -455,6 +494,8 @@ describe('Operators', () => {
       expect(evaluateRules({ name: '' }, [rule])[0].passed).toBe(false);
       expect(evaluateRules({ name: '   ' }, [rule])[0].passed).toBe(false);
       expect(evaluateRules({ name: [] }, [rule])[0].passed).toBe(false);
+      // Boolean false means "switch off / not configured" — treated as not set
+      expect(evaluateRules({ name: false }, [rule])[0].passed).toBe(false);
     });
   });
 
@@ -466,6 +507,14 @@ describe('Operators', () => {
       });
       expect(evaluateRules({ name: null }, [rule])[0].passed).toBe(true);
       expect(evaluateRules({ name: 'Campaign' }, [rule])[0].passed).toBe(false);
+    });
+
+    it('false (switch off) returns passed — switch is not enabled', () => {
+      const rule = makeRule({
+        condition: { operator: RuleOperator.IS_NOT_SET, field: 'partnership_ad' },
+      });
+      expect(evaluateRules({ partnership_ad: false }, [rule])[0].passed).toBe(true);
+      expect(evaluateRules({ partnership_ad: false }, [rule])[0].status).toBe('passed');
     });
   });
 

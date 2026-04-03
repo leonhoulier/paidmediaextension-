@@ -625,6 +625,16 @@ export function getConversionLocation(): string | null {
 }
 
 /**
+ * Extract the message destination.
+ * 2026 DOM: checked radio within "Message destination" section
+ * (e.g. "automatic destination", "manual destination").
+ */
+export function getMessageDestination(): string | null {
+  const label = findElementNearHeading('Message destination', 'label:has(input[type="radio"]:checked)');
+  return label?.textContent?.trim() || null;
+}
+
+/**
  * Extract the performance goal.
  * 2026 DOM: `[role="combobox"]` near performance goal section.
  */
@@ -976,6 +986,7 @@ const FIELD_GETTERS: Record<string, () => unknown> = {
   // Ad set level
   'ad_set.name': getAdSetName,
   'ad_set.conversion_location': getConversionLocation,
+  'ad_set.message_destination': getMessageDestination,
   'ad_set.performance_goal': getPerformanceGoal,
   'ad_set.bid_amount': getBidAmount,
   'ad_set.targeting.geo_locations': getGeoLocations,

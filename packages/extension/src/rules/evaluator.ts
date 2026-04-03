@@ -18,6 +18,17 @@ import { RuleOperator, EnforcementMode } from '@media-buying-governance/shared';
 import { logger } from '../utils/logger.js';
 
 /**
+ * Sentinel value injected by the injector for fields that belong to a
+ * different entity-level panel than the one currently visible in the DOM.
+ *
+ * When the user is on the "Campaign" panel, ad_set.* and ad.* fields can't
+ * be extracted. Instead of leaving them as `null` (which IS_SET / IS_NOT_SET
+ * would interpret as a definitive "not set"), we mark them with this sentinel
+ * so the evaluator can return `status: 'unknown'`.
+ */
+export const NOT_VISIBLE_SENTINEL = '__NOT_VISIBLE__';
+
+/**
  * Evaluate all rules against the current field values
  *
  * @param fieldValues - Current field values extracted from the DOM
@@ -82,6 +93,14 @@ function evaluateRule(
       rule.condition.operator === RuleOperator.MATCHES_EXTERNAL ||
       rule.condition.operator === RuleOperator.CROSS_ENTITY_EQUALS;
 
+    // If the field is on a different panel (sentinel value), we can't evaluate at all
+    const fieldNotVisible = fieldValue === NOT_VISIBLE_SENTINEL;
+
+    // Rule has no field condition (e.g. test/telemetry rules with field=(none)).
+    // Without a field to check, we can't determine pass/fail.
+    const hasNoFieldCondition =
+      !rule.condition.field && !isCompositeOperator;
+
     const fieldIsMissing =
       rule.condition.field &&
       (fieldValue === undefined || fieldValue === null) &&
@@ -89,7 +108,13 @@ function evaluateRule(
       !isCompositeOperator &&
       !isServerSideOperator;
 
-    if (fieldIsMissing) {
+    if (fieldNotVisible || hasNoFieldCondition) {
+      // Field is on another panel or rule has no field — can't determine pass/fail
+      passed = false;
+      status = 'unknown';
+      // Clear the sentinel so it doesn't leak into the result's fieldValue
+      if (fieldNotVisible) fieldValue = undefined;
+    } else if (fieldIsMissing) {
       // Field value couldn't be extracted -- we can't determine pass/fail
       passed = false;
       status = 'unknown';
@@ -365,10 +390,16 @@ function inRange(actual: unknown, expected: unknown): boolean {
 }
 
 /**
- * Check if a value is set (not null, undefined, empty string, or empty array)
+ * Check if a value is set (not null, undefined, empty string, empty array, or false).
+ *
+ * Boolean `false` is treated as "not set" because in Meta Ads Manager
+ * toggle/switch fields, `false` means the feature is turned off (i.e. not
+ * enabled / not configured). Rules like `is_not_set` on a switch that is
+ * Off should PASS.
  */
 function isSet(value: unknown): boolean {
   if (value === null || value === undefined) return false;
+  if (value === false) return false;
   if (typeof value === 'string' && value.trim() === '') return false;
   if (Array.isArray(value) && value.length === 0) return false;
   return true;
