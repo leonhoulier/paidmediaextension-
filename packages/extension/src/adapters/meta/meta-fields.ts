@@ -1436,10 +1436,13 @@ function normalizeBooleanLike(value: unknown): boolean | null {
 }
 
 /**
- * Get the list of all supported field paths (including require() fields).
+ * Get the list of all supported field paths (including require() fields and aliases).
  */
 export function getSupportedFieldPaths(): string[] {
-  return getMetaFieldPaths();
+  const specPaths = getMetaFieldPaths();
+  const getterPaths = Object.keys(FIELD_GETTERS);
+  // Merge both sources — FIELD_GETTERS may have aliases not in field specs
+  return [...new Set([...specPaths, ...getterPaths])];
 }
 
 export function getFieldPathsForEntityLevel(entityLevel: EntityLevel): string[] {
