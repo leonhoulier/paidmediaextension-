@@ -19,7 +19,7 @@ import {
 } from './rule-cache.js';
 
 /** Backend API base URL — injected at build time from .env.production */
-const DEFAULT_API_BASE = process.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const DEFAULT_API_BASE = typeof process !== "undefined" && process.env?.VITE_API_BASE_URL || 'http://localhost:3000';
 
 /**
  * Get the API base URL from storage or use default

@@ -11,7 +11,7 @@
  */
 
 /** Admin portal URL — injected at build time from .env.production */
-const ADMIN_PORTAL_URL = process.env.VITE_ADMIN_PORTAL_URL || 'http://localhost:5173';
+const ADMIN_PORTAL_URL = typeof process !== "undefined" && process.env?.VITE_ADMIN_PORTAL_URL || 'http://localhost:5173';
 
 /** SVG icon for the refresh button */
 const REFRESH_ICON_SVG = `

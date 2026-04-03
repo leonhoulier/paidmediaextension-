@@ -470,7 +470,7 @@ async function handleMessage(
 
       try {
         const storage = await chrome.storage.local.get(['extensionToken', 'apiBaseUrl']);
-        const apiBaseUrl = storage.apiBaseUrl || process.env.VITE_API_BASE_URL || 'http://localhost:3000';
+        const apiBaseUrl = storage.apiBaseUrl || typeof process !== "undefined" && process.env?.VITE_API_BASE_URL || 'http://localhost:3000';
         const extensionToken = storage.extensionToken;
 
         const response = await fetch(`${apiBaseUrl}/api/v1/compliance/events`, {
@@ -701,9 +701,9 @@ async function handleUnpairExtension(): Promise<{ success: boolean }> {
 async function getApiBaseForPairing(): Promise<string> {
   try {
     const result = await chrome.storage.local.get('apiBaseUrl');
-    return (result.apiBaseUrl as string) || process.env.VITE_API_BASE_URL || 'http://localhost:3000';
+    return (result.apiBaseUrl as string) || typeof process !== "undefined" && process.env?.VITE_API_BASE_URL || 'http://localhost:3000';
   } catch {
-    return process.env.VITE_API_BASE_URL || 'http://localhost:3000';
+    return typeof process !== "undefined" && process.env?.VITE_API_BASE_URL || 'http://localhost:3000';
   }
 }
 

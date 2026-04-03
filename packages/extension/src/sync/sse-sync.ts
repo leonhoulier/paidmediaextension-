@@ -37,7 +37,7 @@ import {
 const SSE_STREAM_PATH = '/api/v1/extension/rules-stream';
 
 /** Default API base URL — injected at build time from .env.production */
-const DEFAULT_API_BASE = process.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const DEFAULT_API_BASE = typeof process !== "undefined" && process.env?.VITE_API_BASE_URL || 'http://localhost:3000';
 
 /** Polling alarm name (shared with service-worker.ts) */
 const RULES_POLL_ALARM = 'rules-version-poll';

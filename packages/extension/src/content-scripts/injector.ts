@@ -146,7 +146,7 @@ async function initializeGovernance(): Promise<void> {
       try {
         const storage = await chrome.storage.local.get(['extensionToken', 'apiBaseUrl']);
         const token = storage.extensionToken as string;
-        const baseUrl = (storage.apiBaseUrl as string) || process.env.VITE_API_BASE_URL || 'http://localhost:3000';
+        const baseUrl = (storage.apiBaseUrl as string) || typeof process !== "undefined" && process.env?.VITE_API_BASE_URL || 'http://localhost:3000';
         if (token) {
           logger.info('Fetching rules directly via HTTP...');
           const resp = await fetch(`${baseUrl}/api/v1/rules`, {
@@ -687,7 +687,7 @@ async function refetchRules(): Promise<void> {
       try {
         const storage = await chrome.storage.local.get(['extensionToken', 'apiBaseUrl']);
         const token = storage.extensionToken as string;
-        const baseUrl = (storage.apiBaseUrl as string) || process.env.VITE_API_BASE_URL || 'http://localhost:3000';
+        const baseUrl = (storage.apiBaseUrl as string) || typeof process !== "undefined" && process.env?.VITE_API_BASE_URL || 'http://localhost:3000';
         if (token) {
           const resp = await fetch(`${baseUrl}/api/v1/rules`, {
             headers: { 'X-Extension-Token': token },
