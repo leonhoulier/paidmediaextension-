@@ -86,3 +86,31 @@
 3. Create campaigns with Sales/Leads objectives to discover fields #34-47
 4. Upload media to discover creative fields #34-37
 5. Add rules for every extractable field
+
+## Dynamic Dropdown Options (expanded combobox radio lists)
+
+These options only appear when a combobox is clicked/expanded. We extract the SELECTED value from the combobox text, not the expanded options.
+
+### Performance Goal (varies by objective)
+| Objective | Available Goals |
+|-----------|----------------|
+| Awareness | Maximize reach of ads, Maximize impressions, Maximize ad recall lift, Maximize ThruPlay views, Maximize 2-sec video plays |
+| Traffic | Maximize link clicks, Maximize landing page views |
+| Engagement | Maximize post engagement, Maximize video views |
+| Leads | Maximize leads, Maximize conversion leads |
+| Sales | Maximize conversions, Maximize value |
+
+### Conversion Location (varies by objective)
+| Objective | Available Locations |
+|-----------|-------------------|
+| Traffic | Website, App, Messenger, Instagram, WhatsApp, Phone call |
+| Leads | Instant forms, Website, Messenger, Instagram |
+| Sales | Website, App, Website+App |
+
+### Bid Strategy
+- Highest volume (default)
+- Cost per result goal
+- Bid cap
+- ROAS goal (Sales only)
+
+**Extraction approach:** Read combobox `.textContent` — no need to expand the dropdown.
