@@ -1035,12 +1035,12 @@ export async function isRequireExtractionEnabled(): Promise<boolean> {
       requireExtractionEnabled = result['enable-require-extraction'] === true;
       console.log('[EXTRACTION] Parsed require flag:', requireExtractionEnabled);
     } else {
-      console.log('[EXTRACTION] chrome.storage not available, defaulting to true');
-      requireExtractionEnabled = true;
+      console.log('[EXTRACTION] chrome.storage not available, defaulting to false');
+      requireExtractionEnabled = false;
     }
   } catch (err) {
     console.log('[EXTRACTION] Error reading chrome.storage:', err);
-    requireExtractionEnabled = true;
+    requireExtractionEnabled = false;
   }
   return requireExtractionEnabled;
 }
