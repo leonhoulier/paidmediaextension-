@@ -1108,12 +1108,11 @@ export async function extractAllFieldValues(
   const strategyUsed: Record<string, 'require' | 'remoteEval' | 'fiber' | 'dom' | 'failed'> = {};
   const activeFieldPaths = new Set(allFieldPaths);
 
-  if (activeEntityLevel) {
-    activeFieldPaths.clear();
-    for (const fieldPath of getFieldPathsForEntityLevel(activeEntityLevel)) {
-      activeFieldPaths.add(fieldPath);
-    }
-  }
+  // NOTE: Entity-level filtering disabled. Meta's standalone campaign editor
+  // shows all entity levels (campaign + ad set + ad) simultaneously, so we
+  // need to extract ALL fields regardless of which panel is focused.
+  // The old filter was causing campaign fields to show "COULDN'T VERIFY"
+  // when the ad set panel was active.
 
   // Initialize all fields to null
   for (const fieldPath of allFieldPaths) {
